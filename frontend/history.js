@@ -11,22 +11,22 @@ if (!darkOn) document.body.classList.add('light');
 let runs = [];   // { id, datum, ekipa, disc, ms, time }
 
 // ── FILTER STATE ──
-let hvPeriod  = 'all';
-let hvDisc    = 'all';
-let hvTeam    = 'all';
-let hvSort    = 'index';
-let hvChecked  = new Set();
+let hvPeriod = 'all';
+let hvDisc = 'all';
+let hvTeam = 'all';
+let hvSort = 'index';
+let hvChecked = new Set();
 let hvExpanded = new Set();
 
 // ── UTILS ──
 function fmt(ms) {
   if (!isFinite(ms) || ms < 0) return '00:00';
   const s = Math.floor(ms / 1000);
-  return String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
 }
 function fmtDec(ms) {
   if (!isFinite(ms) || ms < 0) return '.00';
-  return '.' + String(Math.floor((ms % 1000) / 10)).padStart(2,'0');
+  return '.' + String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
 }
 function fmtFull(ms) { return fmt(ms) + fmtDec(ms); }
 
@@ -45,20 +45,28 @@ async function loadRuns() {
       const r = await fetch(API + '/runs', { headers: { 'Authorization': 'Bearer ' + authToken } });
       if (!r.ok) throw new Error();
       const data = await r.json();
-      runs = data.map(r => ({
-        id:    r.id,
-        datum: new Date(r.datum).toLocaleString('sl-SI'),
-        ekipa: r.ekipa || '—',
-        disc:  r.disciplina,
-        ms:    Math.round((r.cas_s || 0) * 1000),
-        time:  fmtFull(Math.round((r.cas_s || 0) * 1000))
-      }));
+      runs = data.map(r => {
+        const iso = r.datum.replace(' ', 'T');
+        return {
+          id: r.id,
+          datum: new Date(iso).toLocaleString('sl-SI'),
+          datumIso: new Date(iso).toISOString(),
+          ekipa: r.ekipa || '—',
+          disc: r.disciplina,
+          ms: Math.round((r.cas_s || 0) * 1000),
+          time: fmtFull(Math.round((r.cas_s || 0) * 1000))
+        };
+      });
     } catch (e) {
       showToast('Napaka pri nalaganju rezultatov.');
     }
   } else {
     // Guest: read from sessionStorage
-    runs = JSON.parse(sessionStorage.getItem('ssv_h') || '[]');
+    runs = JSON.parse(sessionStorage.getItem('ssv_h') || '[]').map(r => ({
+      ...r,
+      ms: Math.round((r.ms || 0)),
+      datumIso: r.datumIso || r.datum
+    }));
   }
   buildHistoryView();
 }
@@ -66,10 +74,10 @@ async function loadRuns() {
 // ── FILTER & SORT ──
 function getHvFiltered() {
   const now = Date.now();
-  const ms  = { day:86400000, week:604800000, month:2592000000, year:31536000000 };
+  const ms = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
   return runs.filter(r => {
     if (hvPeriod !== 'all' && ms[hvPeriod]) {
-      const d = new Date(r.datum);
+      const d = new Date(r.datumIso);
       if (isNaN(d) || (now - d.getTime()) > ms[hvPeriod]) return false;
     }
     if (hvDisc !== 'all' && r.disc !== hvDisc) return false;
@@ -79,8 +87,8 @@ function getHvFiltered() {
 }
 
 function getSortedHv(list) {
-  if (hvSort === 'best') return [...list].sort((a,b) => a.ms - b.ms);
-  return [...list].sort((a,b) => b.id - a.id);
+  if (hvSort === 'best') return [...list].sort((a, b) => a.ms - b.ms);
+  return [...list].sort((a, b) => b.id - a.id);
 }
 
 // ── FILTER STATE PERSISTENCE ──
@@ -93,14 +101,14 @@ function restoreFilterState() {
   const s = JSON.parse(sessionStorage.getItem('ssv_hv_filters') || 'null');
   if (!s) return;
   hvPeriod = s.period || 'all';
-  hvDisc   = s.disc   || 'all';
-  hvTeam   = s.team   || 'all';
-  hvSort   = s.sort   || 'index';
+  hvDisc = s.disc || 'all';
+  hvTeam = s.team || 'all';
+  hvSort = s.sort || 'index';
   // sync all radio UI to restored state
   document.querySelectorAll('[data-period]').forEach(e => e.classList.toggle('active', e.dataset.period === hvPeriod));
-  document.querySelectorAll('[data-disc]').forEach(e =>   e.classList.toggle('active', e.dataset.disc   === hvDisc));
-  document.querySelectorAll('[data-team]').forEach(e =>   e.classList.toggle('active', e.dataset.team   === hvTeam));
-  document.querySelectorAll('[data-sort]').forEach(e =>   e.classList.toggle('active', e.dataset.sort   === hvSort));
+  document.querySelectorAll('[data-disc]').forEach(e => e.classList.toggle('active', e.dataset.disc === hvDisc));
+  document.querySelectorAll('[data-team]').forEach(e => e.classList.toggle('active', e.dataset.team === hvTeam));
+  document.querySelectorAll('[data-sort]').forEach(e => e.classList.toggle('active', e.dataset.sort === hvSort));
 }
 
 // ── BUILD VIEW ──
@@ -139,58 +147,58 @@ function renderCategorizedList(list, container) {
 function groupRuns(list, period) {
   const groups = new Map();
   for (const r of list) {
-    const d = new Date(r.datum);
+    const d = new Date(r.datumIso);
     let key;
-    if      (period === 'month') key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-    else if (period === 'week')  key = getISOWeekKey(d);
-    else if (period === 'year')  key = String(d.getFullYear());
-    else if (period === 'day')   key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    if (period === 'month') key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    else if (period === 'week') key = getISOWeekKey(d);
+    else if (period === 'year') key = String(d.getFullYear());
+    else if (period === 'day') key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     else key = 'all';
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
-  return [...groups.entries()].sort((a,b) => b[0].localeCompare(a[0]));
+  return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 }
 
 function getISOWeekKey(d) {
-  const dt = new Date(d); dt.setHours(0,0,0,0);
-  dt.setDate(dt.getDate() + 3 - (dt.getDay()+6)%7);
+  const dt = new Date(d); dt.setHours(0, 0, 0, 0);
+  dt.setDate(dt.getDate() + 3 - (dt.getDay() + 6) % 7);
   const w1 = new Date(dt.getFullYear(), 0, 4);
-  const wn = 1 + Math.round(((dt - w1)/86400000 - 3 + (w1.getDay()+6)%7)/7);
-  return dt.getFullYear() + '-W' + String(wn).padStart(2,'0');
+  const wn = 1 + Math.round(((dt - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
+  return dt.getFullYear() + '-W' + String(wn).padStart(2, '0');
 }
 
 function getCategoryLabel(key) {
   // YYYY-MM-DD → "Ponedeljek (14.12.2025)" or "Ponedeljek (14.12.)" for current year
   if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
     const d = new Date(key + 'T00:00:00');
-    const days = ['Nedelja','Ponedeljek','Torek','Sreda','\u010cetrtek','Petek','Sobota'];
+    const days = ['Nedelja', 'Ponedeljek', 'Torek', 'Sreda', '\u010cetrtek', 'Petek', 'Sobota'];
     const day = days[d.getDay()];
-    const dd  = d.getDate() + '.' + (d.getMonth()+1) + '.';
-    const yr  = d.getFullYear();
+    const dd = d.getDate() + '.' + (d.getMonth() + 1) + '.';
+    const yr = d.getFullYear();
     return yr === new Date().getFullYear() ? `${day} (${dd})` : `${day} (${dd}${yr})`;
   }
   if (key.includes('-W')) {
     const [year, wPart] = key.split('-W');
     const wn = parseInt(wPart);
     const w1 = new Date(year, 0, 4);
-    const mon = new Date(w1); mon.setDate(w1.getDate() - (w1.getDay()+6)%7 + (wn-1)*7);
-    const sun = new Date(mon); sun.setDate(mon.getDate()+6);
-    const f = dd => dd.getDate() + '. ' + ['jan','feb','mar','apr','maj','jun','jul','avg','sep','okt','nov','dec'][dd.getMonth()];
+    const mon = new Date(w1); mon.setDate(w1.getDate() - (w1.getDay() + 6) % 7 + (wn - 1) * 7);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const f = dd => dd.getDate() + '. ' + ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'][dd.getMonth()];
     return f(mon) + ' \u2013 ' + f(sun) + ' ' + sun.getFullYear();
   }
   if (key.length === 7) {
     const [year, mo] = key.split('-');
-    return ['Januar','Februar','Marec','April','Maj','Junij','Julij','Avgust','September','Oktober','November','December'][parseInt(mo)-1] + ' ' + year;
+    return ['Januar', 'Februar', 'Marec', 'April', 'Maj', 'Junij', 'Julij', 'Avgust', 'September', 'Oktober', 'November', 'December'][parseInt(mo) - 1] + ' ' + year;
   }
   return key;
 }
 
 // ── DOM BUILDERS ──
 function makeCategoryEl(key, list) {
-  const isOpen     = hvExpanded.has(key);
-  const bestMs     = Math.min(...list.map(r => r.ms));
-  const allChecked  = list.every(r => hvChecked.has(r.id));
+  const isOpen = hvExpanded.has(key);
+  const bestMs = Math.min(...list.map(r => r.ms));
+  const allChecked = list.every(r => hvChecked.has(r.id));
   const someChecked = list.some(r => hvChecked.has(r.id));
 
   const cat = document.createElement('div');
@@ -271,29 +279,29 @@ function updateCatCheckState(catEl) {
 }
 
 function toggleCategory(key, catEl) {
-  const hdr  = catEl.querySelector('.hv-cat-header');
+  const hdr = catEl.querySelector('.hv-cat-header');
   const body = catEl.querySelector('.hv-cat-body');
   const open = body.classList.contains('open');
   if (open) { hvExpanded.delete(key); hdr.classList.remove('open'); body.classList.remove('open'); }
-  else      { hvExpanded.add(key);    hdr.classList.add('open');    body.classList.add('open'); }
+  else { hvExpanded.add(key); hdr.classList.add('open'); body.classList.add('open'); }
 }
 
 // ── STATS ──
 function updateHvStats() {
   const selected = getHvFiltered().filter(r => hvChecked.has(r.id));
   if (!selected.length) {
-    document.getElementById('hvPR').textContent    = '\u2014';
-    document.getElementById('hvAvg').textContent   = '\u2014';
+    document.getElementById('hvPR').textContent = '\u2014';
+    document.getElementById('hvAvg').textContent = '\u2014';
     document.getElementById('hvCount').textContent = '0';
-    document.getElementById('hvChart').innerHTML   = '';
+    document.getElementById('hvChart').innerHTML = '';
     return;
   }
-  const best = selected.reduce((b,r) => r.ms < b.ms ? r : b);
-  const avg  = Math.round(selected.reduce((s,r) => s + r.ms, 0) / selected.length);
-  document.getElementById('hvPR').textContent    = fmtFull(best.ms);
-  document.getElementById('hvAvg').textContent   = fmtFull(avg);
+  const best = selected.reduce((b, r) => r.ms < b.ms ? r : b);
+  const avg = Math.round(selected.reduce((s, r) => s + r.ms, 0) / selected.length);
+  document.getElementById('hvPR').textContent = fmtFull(best.ms);
+  document.getElementById('hvAvg').textContent = fmtFull(avg);
   document.getElementById('hvCount').textContent = selected.length;
-  renderChart([...selected].sort((a,b) => new Date(a.datum) - new Date(b.datum)));
+  renderChart([...selected].sort((a, b) => new Date(a.datumIso) - new Date(b.datumIso)));
 }
 
 // ── FILTER SETTERS ──
@@ -325,7 +333,7 @@ function closeFilterOverlay() {
 // ── CHART (Catmull-Rom → Cubic Bezier) ──
 // items: array of {ms, datum, ekipa, disc} sorted chronologically
 function renderChart(items) {
-  const svg  = document.getElementById('hvChart');
+  const svg = document.getElementById('hvChart');
   const wrap = svg && svg.closest('.hv-chart-wrap');
   if (!svg || !wrap) return;
 
@@ -337,52 +345,52 @@ function renderChart(items) {
     wrap.appendChild(tip);
   }
 
-  const W=420, H=160, PL=62, PR=8, PT=8, PB=26;
+  const W = 420, H = 160, PL = 62, PR = 8, PT = 8, PB = 26;
 
   if (items.length < 2) {
-    svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
-    svg.innerHTML = `<text x="${W/2}" y="${H/2+4}" text-anchor="middle" font-family="monospace" font-size="10" fill="rgba(255,255,255,0.2)">Premalo podatkov</text>`;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2 + 4}" text-anchor="middle" font-family="monospace" font-size="10" fill="rgba(255,255,255,0.2)">Premalo podatkov</text>`;
     tip.style.opacity = '0';
     return;
   }
 
   const values = items.map(r => r.ms);
-  const pw = W-PL-PR, ph = H-PT-PB;
-  const minV = Math.min(...values), maxV = Math.max(...values), range = maxV-minV || 1;
-  const toX  = i => PL + (i/(items.length-1))*pw;
-  const toY  = v => PT + ph - ((v-minV)/range)*ph;
-  const pts  = items.map((r,i) => ({
+  const pw = W - PL - PR, ph = H - PT - PB;
+  const minV = Math.min(...values), maxV = Math.max(...values), range = maxV - minV || 1;
+  const toX = i => PL + (i / (items.length - 1)) * pw;
+  const toY = v => PT + ph - ((v - minV) / range) * ph;
+  const pts = items.map((r, i) => ({
     x: toX(i), y: toY(r.ms),
-    ms: r.ms, datum: r.datum, ekipa: r.ekipa||'', disc: r.disc||''
+    ms: r.ms, datum: r.datum, ekipa: r.ekipa || '', disc: r.disc || ''
   }));
 
   function buildPath(p) {
     let d = `M ${p[0].x.toFixed(1)} ${p[0].y.toFixed(1)}`;
-    for (let i=0;i<p.length-1;i++) {
-      const p0=p[Math.max(i-1,0)],p1=p[i],p2=p[i+1],p3=p[Math.min(i+2,p.length-1)];
-      d+=` C ${(p1.x+(p2.x-p0.x)/6).toFixed(1)} ${(p1.y+(p2.y-p0.y)/6).toFixed(1)},`
-        +` ${(p2.x-(p3.x-p1.x)/6).toFixed(1)} ${(p2.y-(p3.y-p1.y)/6).toFixed(1)},`
-        +` ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    for (let i = 0; i < p.length - 1; i++) {
+      const p0 = p[Math.max(i - 1, 0)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(i + 2, p.length - 1)];
+      d += ` C ${(p1.x + (p2.x - p0.x) / 6).toFixed(1)} ${(p1.y + (p2.y - p0.y) / 6).toFixed(1)},`
+        + ` ${(p2.x - (p3.x - p1.x) / 6).toFixed(1)} ${(p2.y - (p3.y - p1.y) / 6).toFixed(1)},`
+        + ` ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
     }
     return d;
   }
 
-  const curve    = buildPath(pts);
-  const fillPath = curve+` L ${pts[pts.length-1].x.toFixed(1)} ${(PT+ph).toFixed(1)} L ${pts[0].x.toFixed(1)} ${(PT+ph).toFixed(1)} Z`;
-  const gid      = 'g'+Math.random().toString(36).slice(2,7);
+  const curve = buildPath(pts);
+  const fillPath = curve + ` L ${pts[pts.length - 1].x.toFixed(1)} ${(PT + ph).toFixed(1)} L ${pts[0].x.toFixed(1)} ${(PT + ph).toFixed(1)} Z`;
+  const gid = 'g' + Math.random().toString(36).slice(2, 7);
   const showDots = items.length <= 18;
 
   // 4 Y ticks
-  const yTicks = [0,0.33,0.67,1].map(t => {
-    const v = minV + t*range;
-    return {y: toY(v), label: fmtFull(Math.round(v))};
+  const yTicks = [0, 0.33, 0.67, 1].map(t => {
+    const v = minV + t * range;
+    return { y: toY(v), label: fmtFull(Math.round(v)) };
   });
 
   // 3 X date labels (sl-SI locale gives "2. 4. 2026, 14:30:00" — take before comma)
-  const xi = [0, Math.floor((items.length-1)/2), items.length-1];
-  const xLabels = xi.map(i => ({x: toX(i), label: items[i].datum.split(',')[0]}));
+  const xi = [0, Math.floor((items.length - 1) / 2), items.length - 1];
+  const xLabels = xi.map(i => ({ x: toX(i), label: items[i].datum.split(',')[0] }));
 
-  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.innerHTML = `
     <defs>
       <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
@@ -390,24 +398,24 @@ function renderChart(items) {
         <stop offset="100%" stop-color="#d4ff00" stop-opacity="0"/>
       </linearGradient>
     </defs>
-    ${yTicks.map(t=>`
-      <line x1="${PL}" y1="${t.y.toFixed(1)}" x2="${W-PR}" y2="${t.y.toFixed(1)}"
+    ${yTicks.map(t => `
+      <line x1="${PL}" y1="${t.y.toFixed(1)}" x2="${W - PR}" y2="${t.y.toFixed(1)}"
             stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-      <text x="${PL-5}" y="${(t.y+3).toFixed(1)}" text-anchor="end"
+      <text x="${PL - 5}" y="${(t.y + 3).toFixed(1)}" text-anchor="end"
             font-family="monospace" font-size="11" fill="rgba(255,255,255,0.65)">${t.label}</text>
     `).join('')}
     <path d="${fillPath}" fill="url(#${gid})"/>
     <path d="${curve}" fill="none" stroke="#d4ff00" stroke-width="1.5"
           stroke-linejoin="round" stroke-linecap="round"/>
-    ${showDots ? pts.map(p=>`
+    ${showDots ? pts.map(p => `
       <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2"
               fill="#d4ff00" opacity="0.55"/>
     `).join('') : ''}
-    ${xLabels.map(l=>`
-      <text x="${l.x.toFixed(1)}" y="${H-4}" text-anchor="middle"
+    ${xLabels.map(l => `
+      <text x="${l.x.toFixed(1)}" y="${H - 4}" text-anchor="middle"
             font-family="monospace" font-size="10" fill="rgba(255,255,255,0.55)">${l.label}</text>
     `).join('')}
-    <line id="hvCrosshair" x1="0" y1="${PT}" x2="0" y2="${PT+ph}"
+    <line id="hvCrosshair" x1="0" y1="${PT}" x2="0" y2="${PT + ph}"
           stroke="#d4ff00" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
     <circle id="hvActiveDot" cx="-99" cy="-99" r="5"
             fill="#d4ff00" stroke="#080808" stroke-width="2" opacity="0"/>
@@ -417,18 +425,18 @@ function renderChart(items) {
 
   const crosshair = document.getElementById('hvCrosshair');
   const activeDot = document.getElementById('hvActiveDot');
-  const hitzone   = document.getElementById('hvHitzone');
+  const hitzone = document.getElementById('hvHitzone');
 
   function pickPoint(clientX) {
     const rect = svg.getBoundingClientRect();
     const svgX = ((clientX - rect.left) / rect.width) * W;
     let best = 0, bestD = Infinity;
-    pts.forEach((p,i) => { const d=Math.abs(p.x-svgX); if(d<bestD){bestD=d;best=i;} });
-    return {idx: best, pt: pts[best], rect};
+    pts.forEach((p, i) => { const d = Math.abs(p.x - svgX); if (d < bestD) { bestD = d; best = i; } });
+    return { idx: best, pt: pts[best], rect };
   }
 
   function showTip(clientX) {
-    const {pt, rect} = pickPoint(clientX);
+    const { pt, rect } = pickPoint(clientX);
     crosshair.setAttribute('x1', pt.x.toFixed(1));
     crosshair.setAttribute('x2', pt.x.toFixed(1));
     crosshair.setAttribute('opacity', '0.45');
@@ -437,17 +445,17 @@ function renderChart(items) {
     activeDot.setAttribute('opacity', '1');
     const shortDate = pt.datum.split(',')[0];
     tip.innerHTML = `<span class="ct-time">${fmtFull(pt.ms)}</span>`
-                  + `<span class="ct-meta">${shortDate} · ${pt.ekipa}</span>`;
+      + `<span class="ct-meta">${shortDate} · ${pt.ekipa}</span>`;
     tip.style.opacity = '1';
-    const relX  = (pt.x / W) * rect.width;
-    const relY  = (pt.y / H) * rect.height;
-    const tw    = tip.offsetWidth || 110;
+    const relX = (pt.x / W) * rect.width;
+    const relY = (pt.y / H) * rect.height;
+    const tw = tip.offsetWidth || 110;
     const wrapW = wrap.offsetWidth || W;
-    let left = relX - tw/2;
+    let left = relX - tw / 2;
     if (left < 4) left = 4;
     if (left + tw > wrapW - 4) left = wrapW - tw - 4;
     tip.style.left = left + 'px';
-    tip.style.top  = Math.max(4, relY - 56) + 'px';
+    tip.style.top = Math.max(4, relY - 56) + 'px';
   }
 
   function hideTip() {
@@ -456,16 +464,16 @@ function renderChart(items) {
     tip.style.opacity = '0';
   }
 
-  hitzone.addEventListener('mousemove',  e => showTip(e.clientX));
+  hitzone.addEventListener('mousemove', e => showTip(e.clientX));
   hitzone.addEventListener('mouseleave', hideTip);
-  hitzone.addEventListener('touchmove',  e => { e.preventDefault(); showTip(e.touches[0].clientX); }, {passive:false});
-  hitzone.addEventListener('touchend',   hideTip);
+  hitzone.addEventListener('touchmove', e => { e.preventDefault(); showTip(e.touches[0].clientX); }, { passive: false });
+  hitzone.addEventListener('touchend', hideTip);
 }
 
 // ── CSV EXPORT ──
 function exportCSV() {
   if (authToken) {
-    fetch(API + '/runs/export', { headers:{ 'Authorization':'Bearer '+authToken } })
+    fetch(API + '/runs/export', { headers: { 'Authorization': 'Bearer ' + authToken } })
       .then(r => { if (!r.ok) throw new Error(); return r.blob(); })
       .then(blob => {
         const a = Object.assign(document.createElement('a'), {
@@ -478,11 +486,11 @@ function exportCSV() {
   }
   const lines = ['id,ekipa,disciplina,cas_s,cas_format,datum'];
   for (const r of runs) {
-    const ek = (r.ekipa||'').replace(/"/g,'""');
-    lines.push(`${r.id},"${ek}",${r.disc||''},${(r.ms/1000).toFixed(3)},${r.time},${r.datum}`);
+    const ek = (r.ekipa || '').replace(/"/g, '""');
+    lines.push(`${r.id},"${ek}",${r.disc || ''},${(r.ms / 1000).toFixed(3)},${r.time},${r.datum}`);
   }
   const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(new Blob([lines.join('\r\n')], {type:'text/csv'})),
+    href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })),
     download: 'ssv-rezultati.csv'
   });
   a.click(); URL.revokeObjectURL(a.href);
@@ -513,7 +521,7 @@ function setupResizer(el, body, side) {
     if (!el.classList.contains('dragging')) return;
     const dx = e.clientX - startX;
     let fw = startFW, sw = startSW;
-    if (side === 'left')  fw = Math.max(100, startFW + dx);
+    if (side === 'left') fw = Math.max(100, startFW + dx);
     if (side === 'right') sw = Math.max(160, startSW - dx);
     body.style.setProperty('--hv-cols', `${fw}px 4px 1fr 4px ${sw}px`);
   });

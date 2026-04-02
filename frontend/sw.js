@@ -1,5 +1,5 @@
 const CACHE = 'ssv-v2';
-const STATIC = ['/'];
+const STATIC = ['/', '/index.html', '/app.js', '/style.css', '/history.html', '/history.js', '/stats.html', '/manifest.json'];
 
 // Install: cache the app shell
 self.addEventListener('install', e => {

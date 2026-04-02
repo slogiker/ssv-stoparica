@@ -9,5 +9,5 @@ COPY . .
 
 RUN mkdir -p /app/data
 
-EXPOSE 3000
+EXPOSE 4827
 CMD ["node", "index.js"]
