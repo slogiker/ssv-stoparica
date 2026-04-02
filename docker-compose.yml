@@ -1,0 +1,26 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8742:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=4827
+      - DB_PATH=/app/data/stoparica.db
+    volumes:
+      - sqlite_data:/app/data
+    expose:
+      - "4827"
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:

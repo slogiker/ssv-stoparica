@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#080808"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080808'/%3E%3Ctext x='16' y='24' font-family='sans-serif' font-size='22' font-weight='bold' fill='%23d4ff00' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E"/>
+<title>SSV Stoparica — Statistike</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<div class="history-page">
+
+  <div class="topbar">
+    <div class="logo">
+      <span class="logo-ssv">SSV</span>
+      <span class="logo-slash">//</span>
+      <span class="logo-name">Statistike</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="ico-btn" onclick="exportCSV()" title="Izvozi CSV">&#8681;</button>
+      <button class="ico-btn" onclick="history.back()" title="Nazaj">&#11013;</button>
+    </div>
+  </div>
+
+  <!-- Stats body — full page on mobile, right col content on desktop -->
+  <div class="stats-page-body">
+    <div class="hv-kpi-row">
+      <div class="hv-kpi"><div class="hv-kpi-label">Osebni rekord</div><div class="hv-kpi-val" id="hvPR">&#8212;</div></div>
+      <div class="hv-kpi"><div class="hv-kpi-label">Povpre&#269;je</div><div class="hv-kpi-val neutral" id="hvAvg">&#8212;</div></div>
+      <div class="hv-kpi"><div class="hv-kpi-label">Ozna&#269;enih</div><div class="hv-kpi-val neutral" id="hvCount">0</div></div>
+    </div>
+    <div class="hv-chart-wrap">
+      <svg id="hvChart" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <!-- Mobile tab bar -->
+  <div class="hv-tabbar">
+    <button class="hv-tab" onclick="openFilterOverlay()">Filtri</button>
+    <button class="hv-tab" onclick="location.href='history.html'">Vaje</button>
+    <button class="hv-tab active">Stats</button>
+  </div>
+
+</div>
+
+<!-- Filter overlay (same as history.html) -->
+<div class="filter-overlay" id="filterOverlay">
+  <div class="panel-back" onclick="closeFilterOverlay()"></div>
+  <div class="filter-overlay-body">
+    <div class="filter-overlay-hdr">
+      <span class="filter-overlay-title">Filtri</span>
+      <button class="panel-close" onclick="closeFilterOverlay()">&#10005;</button>
+    </div>
+    <div class="filter-overlay-content">
+      <div class="hv-filter-section">
+        <div class="hv-filter-title">Obdobje</div>
+        <div class="hv-radio-option active" data-period="all"   onclick="setHvPeriod(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>
+        <div class="hv-radio-option"        data-period="day"   onclick="setHvPeriod(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Dan</span></div>
+        <div class="hv-radio-option"        data-period="week"  onclick="setHvPeriod(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Teden</span></div>
+        <div class="hv-radio-option"        data-period="month" onclick="setHvPeriod(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Mesec</span></div>
+        <div class="hv-radio-option"        data-period="year"  onclick="setHvPeriod(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Leto</span></div>
+      </div>
+      <div class="hv-filter-section">
+        <div class="hv-filter-title">Disciplina</div>
+        <div class="hv-radio-option active" data-disc="all"    onclick="setHvDisc(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>
+        <div class="hv-radio-option"        data-disc="zimska" onclick="setHvDisc(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Zimska</span></div>
+        <div class="hv-radio-option"        data-disc="letna"  onclick="setHvDisc(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Letna</span></div>
+      </div>
+      <div class="hv-filter-section">
+        <div class="hv-filter-title">Ekipa</div>
+        <div class="hv-radio-option active" data-team="all"      onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>
+        <div class="hv-radio-option"        data-team="Člani-A"  onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Člani-A</span></div>
+        <div class="hv-radio-option"        data-team="Člani-B"  onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Člani-B</span></div>
+      </div>
+      <div class="hv-filter-section">
+        <div class="hv-filter-title">Razvrsti</div>
+        <div class="hv-radio-option active" data-sort="index" onclick="setHvSort(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Najnovejši</span></div>
+        <div class="hv-radio-option"        data-sort="best"  onclick="setHvSort(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Najboljši &#269;as</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="history.js"></script>
+</body>
+</html>

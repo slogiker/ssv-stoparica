@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#080808"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080808'/%3E%3Ctext x='16' y='24' font-family='sans-serif' font-size='22' font-weight='bold' fill='%23d4ff00' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E"/>
+<title>SSV Stoparica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ── LANDSCAPE VIEW ── -->
+<div class="landscape-view">
+  <div class="landscape-timer" id="lsTimer">00:00<span style="font-size:.45em;opacity:.5">.00</span></div>
+  <button class="landscape-stop" onclick="handleStop()">&#9632; STOP</button>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div class="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo">
+      <span class="logo-ssv">SSV</span>
+      <span class="logo-slash">//</span>
+      <span class="logo-name">Stoparica</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="ico-btn lit" id="soundBtn" onclick="toggleSound()" title="Zvok">&#128266;</button>
+      <button class="ico-btn" onclick="location.href='history.html'" title="Zgodovina">&#8801;</button>
+      <button class="ico-btn" id="authBtn" onclick="openAuthModal()" title="Prijava">&#128100;</button>
+      <button class="ico-btn" onclick="openSettings()" title="Nastavitve">&#9881;</button>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <div class="ble-pill" onclick="bleConnect()">
+      <div class="ble-dot" id="bleDot"></div>
+      <span class="ble-label" id="bleLabel">Tapni za povezavo z ESP2</span>
+    </div>
+    <div class="stat-pills">
+      <div class="stat-pill">&#128246; <span class="val" id="rssiVal">&#8212;</span></div>
+      <div class="stat-pill">&#128267; <span class="val" id="batVal">&#8212;</span></div>
+    </div>
+  </div>
+
+  <!-- TIMER -->
+  <div class="timer-area">
+    <div class="timer-glow" id="timerGlow"></div>
+    <div class="timer-label" id="timerLabel">&#268;AKANJE NA START</div>
+    <div class="timer-wrap" id="timerWrap">
+      <div class="timer-main" id="timerMain">00:00</div>
+      <div class="timer-dec"  id="timerDec">.00</div>
+    </div>
+    <div class="disc-badge">
+      <div class="badge active" id="badgeZ" onclick="setDisc('zimska')">Z &#8212; ZIMSKA</div>
+      <div class="badge" id="badgeL" onclick="setDisc('letna')">L &#8212; LETNA</div>
+    </div>
+    <div class="last-strip" id="lastStrip" style="opacity:.5">
+      <span class="last-label">Zadnji &#269;as</span>
+      <span class="last-pr" id="lastPr">PR</span>
+      <span class="last-time" id="lastTime">&#8212;</span>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="btn-start" id="startBtn" onclick="handleStart()">&#9654; START</button>
+    <div class="secondary-row">
+      <button class="btn-stop"  id="stopBtn"  onclick="handleStop()"  disabled>&#9632; STOP</button>
+      <button class="btn-reset" id="resetBtn" onclick="handleReset()" disabled>&#8634; RESET</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── SETTINGS PANEL ── -->
+<div class="panel settings-panel" id="settingsPanel">
+  <div class="panel-back" onclick="closeSettings()"></div>
+  <div class="panel-body">
+    <div class="panel-header">
+      <span class="panel-title">Nastavitve</span>
+      <button class="panel-close" onclick="closeSettings()">&#10005;</button>
+    </div>
+    <div class="panel-content" style="display:flex;flex-direction:column;gap:0">
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Dark mode</div>
+          <div class="setting-desc">Preklopi svetlo / temno</div>
+        </div>
+        <div class="tog on" id="darkTog" onclick="toggleDark()"></div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Zvok ob startu</div>
+          <div class="setting-desc">GZS start signal</div>
+        </div>
+        <div class="tog on" id="soundTog" onclick="toggleSound()"></div>
+      </div>
+
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div class="setting-info">
+          <div class="setting-name">Glasnost</div>
+        </div>
+        <div class="setting-slider">
+          <input class="slider" type="range" id="volSlider" min="0" max="100" value="80"/>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Haptic feedback</div>
+          <div class="setting-desc">Vibracija ob startu/stopu</div>
+        </div>
+        <div class="tog on" id="hapticTog" onclick="toggleHaptic()"></div>
+      </div>
+
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div class="setting-info">
+          <div class="setting-name">Jakost vibracije</div>
+        </div>
+        <div class="setting-slider">
+          <input class="slider" type="range" id="hapticSlider" min="1" max="3" value="2"/>
+        </div>
+      </div>
+
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div class="setting-info">
+          <div class="setting-name">Disciplina</div>
+          <div class="setting-desc">Dolo&#269;i start zvok</div>
+        </div>
+        <select class="setting-select" id="discSelect" onchange="discChanged()">
+          <option value="zimska">Zimska liga</option>
+          <option value="letna">Letna liga</option>
+        </select>
+      </div>
+
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div class="setting-info">
+          <div class="setting-name">Ekipa</div>
+          <div class="setting-desc">Prilepi se na vsak run</div>
+        </div>
+        <div class="ekipa-toggle">
+          <button class="ekipa-opt active" data-e="Člani-A" onclick="setEkipa(this)">Člani-A</button>
+          <button class="ekipa-opt"        data-e="Člani-B" onclick="setEkipa(this)">Člani-B</button>
+        </div>
+      </div>
+
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div class="setting-info">
+          <div class="setting-name">BLE naprava</div>
+          <div class="setting-desc" id="bleDeviceDesc">Ni shranjene naprave</div>
+        </div>
+        <button class="setting-select" onclick="forgetDevice()"
+          style="cursor:pointer;color:var(--danger);border-color:var(--danger);text-align:left">
+          Pozabi napravo
+        </button>
+      </div>
+
+      <a class="github-row" href="https://github.com/slogiker/ssv-stoparica" target="_blank" style="margin-top:16px">
+        <div class="github-icon">&#9672;</div>
+        <div class="github-info">
+          <div class="github-name">GitHub Repository</div>
+          <div class="github-sub">github.com/slogiker/ssv-stoparica</div>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── ACCOUNT PANEL ── -->
+<div class="panel account-panel" id="accountPanel">
+  <div class="panel-back" onclick="closeAccountModal()"></div>
+  <div class="panel-body">
+    <div class="panel-header">
+      <span class="panel-title">Moj ra&#269;un</span>
+      <button class="panel-close" onclick="closeAccountModal()">&#10005;</button>
+    </div>
+    <div class="panel-content" style="padding:0;display:flex;flex-direction:column;gap:0">
+
+      <!-- User identity -->
+      <div class="acc-identity">
+        <div class="acc-avatar" id="accAvatar"></div>
+        <div class="acc-name" id="accDisplayName"></div>
+        <button class="acc-logout-btn" onclick="doLogout();closeAccountModal()">Odjava</button>
+      </div>
+
+      <!-- Change name -->
+      <div class="acc-section" id="accSecIme">
+        <div class="acc-section-hdr" onclick="toggleAccSection('accSecIme')">
+          <span class="acc-section-title">Ime</span>
+          <span class="acc-section-arrow">&#8250;</span>
+        </div>
+        <div class="acc-section-body">
+          <form class="acc-form" onsubmit="submitProfileChange(event)">
+            <input class="auth-input" id="accImeInput" type="text" placeholder="Novo ime" autocomplete="name" required/>
+            <button class="auth-submit" type="submit">Shrani</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Change password -->
+      <div class="acc-section" id="accSecGeslo">
+        <div class="acc-section-hdr" onclick="toggleAccSection('accSecGeslo')">
+          <span class="acc-section-title">Geslo</span>
+          <span class="acc-section-arrow">&#8250;</span>
+        </div>
+        <div class="acc-section-body">
+          <form class="acc-form" onsubmit="submitPasswordChange(event)">
+            <input class="auth-input" id="accTrenutno" type="password" placeholder="Trenutno geslo" autocomplete="current-password" required/>
+            <input class="auth-input" id="accNovo" type="password" placeholder="Novo geslo (min. 8 znakov)" autocomplete="new-password" required minlength="8"/>
+            <button class="auth-submit" type="submit">Spremeni geslo</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Delete account -->
+      <div class="acc-section" id="accSecDelete">
+        <div class="acc-section-hdr" onclick="toggleAccSection('accSecDelete')">
+          <span class="acc-section-title" style="color:var(--danger)">Nevarno obmo&#269;je</span>
+          <span class="acc-section-arrow" style="color:var(--danger)">&#8250;</span>
+        </div>
+        <div class="acc-section-body">
+          <p style="font-size:12px;color:var(--muted);line-height:1.5;margin:0">
+            Trajno bri&#353;e&#353; ra&#269;un in vse rezultate. Tega dejanja ni mogo&#269;e razveljaviti.
+          </p>
+          <button class="auth-submit" style="background:var(--danger);color:#fff" onclick="submitDeleteAccount()">
+            Izbri&#353;i ra&#269;un in podatke
+          </button>
+        </div>
+      </div>
+
+      <div class="auth-error" id="accError" style="padding:8px 20px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="auth-modal" id="authModal">
+  <div class="panel-back" onclick="closeAuthModal()"></div>
+  <div class="auth-box">
+    <button class="auth-close" onclick="closeAuthModal()">&#10005;</button>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="authTabLogin"    onclick="showAuthTab('login')">Prijava</button>
+      <button class="auth-tab"        id="authTabRegister" onclick="showAuthTab('register')">Registracija</button>
+    </div>
+
+    <!-- Login form -->
+    <form class="auth-form" id="authFormLogin" onsubmit="submitLogin(event)">
+      <input class="auth-input" id="loginInput" type="text"     placeholder="Ime ali e-pošta" autocomplete="username" required/>
+      <input class="auth-input" id="loginGeslo" type="password" placeholder="Geslo"           autocomplete="current-password" required/>
+      <button class="auth-submit" type="submit">Prijava</button>
+    </form>
+
+    <!-- Register form -->
+    <form class="auth-form" id="authFormRegister" onsubmit="submitRegister(event)" style="display:none">
+      <input class="auth-input" id="regIme"   type="text"     placeholder="Ime"       autocomplete="name"     required/>
+      <input class="auth-input" id="regEmail" type="email"    placeholder="E-pošta"   autocomplete="email"    required/>
+      <input class="auth-input" id="regGeslo" type="password" placeholder="Geslo (min. 8 znakov)" autocomplete="new-password" required minlength="8"/>
+      <button class="auth-submit" type="submit">Ustvari račun</button>
+    </form>
+
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,1 +1,39 @@
-node_modules/\n.env\n*.db\nsqlite_data/
+# Dependencies
+node_modules/
+
+# Environment secrets
+.env
+
+# Database & data
+*.db
+*.db-shm
+*.db-wal
+backend/data/
+
+# Docker volumes
+sqlite_data/
+
+# Dev artifacts
+.playwright-mcp/
+*.log
+__pycache__/
+*.pyc
+*.pyo
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp / screenshots
+current-state.png
+/tmp/
+
+# Claude internals
+.claude/
