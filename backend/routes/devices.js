@@ -3,12 +3,22 @@ const db = require('../db');
 
 const router = express.Router();
 
+// BLE service/characteristic UUIDs can be standard 16-bit (4 hex digits) or
+// full 128-bit (8-4-4-4-12 hex) forms. Accept either.
+const UUID_RE = /^([0-9a-f]{4}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
 // POST /api/devices
 // Body: { uuid, friendly_name }
 router.post('/', (req, res) => {
   const { uuid, friendly_name } = req.body;
   if (!uuid) {
     return res.status(400).json({ napaka: 'UUID naprave je obvezen.' });
+  }
+  if (!UUID_RE.test(uuid)) {
+    return res.status(400).json({ napaka: 'UUID naprave ni v veljavni obliki.' });
+  }
+  if (friendly_name && (typeof friendly_name !== 'string' || friendly_name.length > 100)) {
+    return res.status(400).json({ napaka: 'Ime naprave je predolgo (največ 100 znakov).' });
   }
   // Prevent duplicates per user
   const existing = db.prepare(

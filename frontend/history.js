@@ -289,6 +289,8 @@ function toggleCategory(key, catEl) {
 // ── STATS ──
 function updateHvStats() {
   const selected = getHvFiltered().filter(r => hvChecked.has(r.id));
+  const delBtn = document.getElementById('hvDeleteBtn');
+  if (delBtn) delBtn.style.display = hvChecked.size > 0 ? '' : 'none';
   if (!selected.length) {
     document.getElementById('hvPR').textContent = '\u2014';
     document.getElementById('hvAvg').textContent = '\u2014';
@@ -302,6 +304,38 @@ function updateHvStats() {
   document.getElementById('hvAvg').textContent = fmtFull(avg);
   document.getElementById('hvCount').textContent = selected.length;
   renderChart([...selected].sort((a, b) => new Date(a.datumIso) - new Date(b.datumIso)));
+}
+
+// ── DELETE SELECTED RUNS ──
+async function deleteSelected() {
+  const ids = [...hvChecked];
+  if (!ids.length) return;
+  const btn = document.getElementById('hvDeleteBtn');
+  if (btn) btn.disabled = true;
+
+  if (authToken) {
+    const failed = [];
+    for (const id of ids) {
+      try {
+        const r = await fetch(API + '/runs/' + id, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (r.status !== 204) failed.push(id);
+      } catch { failed.push(id); }
+    }
+    if (failed.length) showToast('Napaka pri brisanju ' + failed.length + ' vnosov.');
+  } else {
+    // Guest: remove from sessionStorage
+    const stored = JSON.parse(sessionStorage.getItem('ssv_h') || '[]');
+    sessionStorage.setItem('ssv_h', JSON.stringify(stored.filter(r => !ids.includes(r.id))));
+  }
+
+  runs = runs.filter(r => !ids.includes(r.id));
+  hvChecked.clear();
+  if (btn) { btn.disabled = false; btn.style.display = 'none'; }
+  buildHistoryView();
+  showToast('Izbrisano: ' + ids.length);
 }
 
 // ── FILTER SETTERS ──
@@ -336,6 +370,8 @@ function renderChart(items) {
   const svg = document.getElementById('hvChart');
   const wrap = svg && svg.closest('.hv-chart-wrap');
   if (!svg || !wrap) return;
+  // Read the accent colour from the current theme so the chart respects light mode.
+  const acc = getComputedStyle(document.body).getPropertyValue('--acc').trim() || '#d4ff00';
 
   // Ensure tooltip element
   let tip = wrap.querySelector('.ct');
@@ -349,7 +385,7 @@ function renderChart(items) {
 
   if (items.length < 2) {
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.innerHTML = `<text x="${W / 2}" y="${H / 2 + 4}" text-anchor="middle" font-family="monospace" font-size="10" fill="rgba(255,255,255,0.2)">Premalo podatkov</text>`;
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2 + 4}" text-anchor="middle" font-family="monospace" font-size="10" fill="${acc}" opacity="0.3">Premalo podatkov</text>`;
     tip.style.opacity = '0';
     return;
   }
@@ -394,31 +430,31 @@ function renderChart(items) {
   svg.innerHTML = `
     <defs>
       <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%"   stop-color="#d4ff00" stop-opacity="0.14"/>
-        <stop offset="100%" stop-color="#d4ff00" stop-opacity="0"/>
+        <stop offset="0%"   stop-color="${acc}" stop-opacity="0.14"/>
+        <stop offset="100%" stop-color="${acc}" stop-opacity="0"/>
       </linearGradient>
     </defs>
     ${yTicks.map(t => `
       <line x1="${PL}" y1="${t.y.toFixed(1)}" x2="${W - PR}" y2="${t.y.toFixed(1)}"
-            stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+            stroke="rgba(127,127,127,0.15)" stroke-width="1"/>
       <text x="${PL - 5}" y="${(t.y + 3).toFixed(1)}" text-anchor="end"
-            font-family="monospace" font-size="11" fill="rgba(255,255,255,0.65)">${t.label}</text>
+            font-family="monospace" font-size="11" fill="rgba(127,127,127,0.65)">${t.label}</text>
     `).join('')}
     <path d="${fillPath}" fill="url(#${gid})"/>
-    <path d="${curve}" fill="none" stroke="#d4ff00" stroke-width="1.5"
+    <path d="${curve}" fill="none" stroke="${acc}" stroke-width="1.5"
           stroke-linejoin="round" stroke-linecap="round"/>
     ${showDots ? pts.map(p => `
       <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2"
-              fill="#d4ff00" opacity="0.55"/>
+              fill="${acc}" opacity="0.55"/>
     `).join('') : ''}
     ${xLabels.map(l => `
       <text x="${l.x.toFixed(1)}" y="${H - 4}" text-anchor="middle"
-            font-family="monospace" font-size="10" fill="rgba(255,255,255,0.55)">${l.label}</text>
+            font-family="monospace" font-size="10" fill="rgba(127,127,127,0.65)">${l.label}</text>
     `).join('')}
     <line id="hvCrosshair" x1="0" y1="${PT}" x2="0" y2="${PT + ph}"
-          stroke="#d4ff00" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+          stroke="${acc}" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
     <circle id="hvActiveDot" cx="-99" cy="-99" r="5"
-            fill="#d4ff00" stroke="#080808" stroke-width="2" opacity="0"/>
+            fill="${acc}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
     <rect id="hvHitzone" x="${PL}" y="${PT}" width="${pw}" height="${ph}"
           fill="transparent" style="cursor:crosshair"/>
   `;

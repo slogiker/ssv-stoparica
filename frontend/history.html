@@ -22,6 +22,7 @@
       <span class="logo-name">Zgodovina</span>
     </div>
     <div class="topbar-actions">
+      <button class="ico-btn" id="hvDeleteBtn" onclick="deleteSelected()" title="Izbri&#353;i izbrano" style="color:var(--danger);display:none">&#128465;</button>
       <button class="ico-btn" onclick="exportCSV()" title="Izvozi CSV">&#8681;</button>
       <button class="ico-btn" onclick="history.back()" title="Nazaj">&#11013;</button>
     </div>
@@ -129,6 +130,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="error-guard.js"></script>
 <script src="history.js"></script>
 </body>
 </html>

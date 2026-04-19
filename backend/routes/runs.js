@@ -12,6 +12,20 @@ function filterClause(filter) {
   return '';
 }
 
+// Escape SQL LIKE special characters so user-supplied ekipa search is literal.
+function escapeLike(s) {
+  return s.replace(/[%_\\]/g, '\\$&');
+}
+
+// Prefix CSV cell values that start with formula-trigger characters (=+-@|) with
+// a tab so spreadsheet apps don't evaluate them as formulas.
+function csvSafe(value) {
+  if (typeof value === 'string' && /^[=+\-@|]/.test(value)) {
+    return '\t' + value;
+  }
+  return value;
+}
+
 // GET /api/runs
 // Query: ?filter=dan|teden|mesec|leto  &disciplina=zimska|letna  &ekipa=...
 router.get('/', (req, res) => {
@@ -21,7 +35,8 @@ router.get('/', (req, res) => {
 
   if (filter) sql += ' ' + filterClause(filter);
   if (disciplina) { sql += ' AND disciplina = ?'; params.push(disciplina); }
-  if (ekipa)      { sql += ' AND ekipa LIKE ?';   params.push('%' + ekipa + '%'); }
+  // Escape LIKE metacharacters so a search for e.g. "50%" isn't treated as a wildcard.
+  if (ekipa)      { sql += ' AND ekipa LIKE ? ESCAPE \'\\\''; params.push('%' + escapeLike(ekipa) + '%'); }
 
   sql += ' ORDER BY datum DESC';
 
@@ -42,6 +57,9 @@ router.post('/', (req, res) => {
   }
   if (disciplina && !['zimska', 'letna'].includes(disciplina)) {
     return res.status(400).json({ napaka: 'Disciplina mora biti zimska ali letna.' });
+  }
+  if (ekipa && (typeof ekipa !== 'string' || ekipa.length > 50)) {
+    return res.status(400).json({ napaka: 'Ime ekipe je predolgo (največ 50 znakov).' });
   }
   try {
     const result = db.prepare(
@@ -81,7 +99,9 @@ router.get('/export', (req, res) => {
       const cas_format = String(Math.floor(total_s / 60)).padStart(2, '0') + ':' +
                          String(total_s % 60).padStart(2, '0') + '.' +
                          String(cs).padStart(2, '0');
-      const ekipa = (r.ekipa || '').replace(/"/g, '""');
+      // Escape double-quotes for RFC 4180 CSV, then guard against formula injection
+      // (values starting with = + - @ | could be executed by Excel/LibreOffice).
+      const ekipa = csvSafe((r.ekipa || '').replace(/"/g, '""'));
       lines.push(`${r.id},"${ekipa}",${r.disciplina || ''},${r.cas_s},${cas_format},${r.datum}`);
     }
 
@@ -90,6 +110,20 @@ router.get('/export', (req, res) => {
     res.send(lines.join('\r\n'));
   } catch (e) {
     res.status(500).json({ napaka: 'Napaka pri izvozu.' });
+  }
+});
+
+// DELETE /api/runs/:id
+router.delete('/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id)) return res.status(400).json({ napaka: 'Neveljaven ID.' });
+  try {
+    const run = db.prepare('SELECT id FROM runs WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!run) return res.status(404).json({ napaka: 'Vnos ni najden.' });
+    db.prepare('DELETE FROM runs WHERE id = ?').run(id);
+    res.status(204).end();
+  } catch (e) {
+    res.status(500).json({ napaka: 'Napaka pri brisanju.' });
   }
 });
 

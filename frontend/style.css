@@ -246,7 +246,7 @@ body {
 .btn-stop:disabled { opacity:.2;cursor:not-allowed; }
 .btn-reset {
   flex:1;padding:clamp(14px,2.5vw,20px) 10px;
-  background:var(--s1);color:var(--muted);border:1px solid var(--border);border-radius:12px;
+  background:var(--s2);color:var(--text);border:1px solid var(--border);border-radius:12px;
   font-family:var(--font-sans);font-weight:500;
   font-size:clamp(12px,2vw,15px);letter-spacing:.15em;text-transform:uppercase;
   cursor:pointer;transition:transform .1s,opacity .15s;
@@ -675,30 +675,33 @@ body {
 }
 .toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
 
-/* ── DESKTOP: wider layout adjustments ── */
-@media (min-width:1024px) {
-  :root { --topbar-h:64px; --status-h:48px; }
-
-  body { overflow:auto; }
-
-  .app { height:auto; min-height:100dvh; max-width:760px; margin:0 auto; }
-  body { background:var(--bg); }
-
-  .timer-area { padding:40px 48px 20px; }
-
-  .controls {
-    padding:16px 48px 40px;
+/* ── DESKTOP: centered phone-width layout ── */
+@media (min-width:600px) {
+  body {
     flex-direction:row;
-    align-items:center;
-    gap:14px;
-    max-width:700px;
+    justify-content:center;
+    align-items:stretch;
+    overflow:auto;
   }
-  .btn-start   { flex:2; padding:22px; }
-  .btn-stop    { flex:1.5; }
-  .btn-reset   { flex:1; }
-  .secondary-row { flex:2;display:flex;gap:14px; }
+  .app {
+    width:430px;
+    max-width:430px;
+    min-width:320px;
+    flex-shrink:0;
+    height:auto;
+    min-height:100dvh;
+    border-left:1px solid var(--border);
+    border-right:1px solid var(--border);
+    box-shadow:0 0 60px rgba(0,0,0,.5);
+  }
+  /* Landscape view still full-width */
+  .landscape-view { width:100vw; }
+}
 
-  .settings-panel .panel-body { width:min(400px,40vw); }
+@media (min-width:1024px) {
+  :root { --topbar-h:60px; --status-h:44px; }
+  body { background:var(--bg); }
+  .timer-area { padding:32px 32px 16px; }
 }
 
 @media (min-width:1400px) {

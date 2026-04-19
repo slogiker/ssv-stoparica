@@ -1,7 +1,11 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'stoparica.db');
+
+// Ensure the parent directory exists — better-sqlite3 throws if it doesn't.
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
 
@@ -35,6 +39,11 @@ db.exec(`
     friendly_name TEXT,
     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- Indexes for the most common query patterns
+  CREATE INDEX IF NOT EXISTS idx_runs_user_datum    ON runs    (user_id, datum DESC);
+  CREATE INDEX IF NOT EXISTS idx_runs_user_cas      ON runs    (user_id, cas_s);
+  CREATE INDEX IF NOT EXISTS idx_devices_user       ON devices (user_id);
 `);
 
 module.exports = db;

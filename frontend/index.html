@@ -19,7 +19,7 @@
 <!-- ── LANDSCAPE VIEW ── -->
 <div class="landscape-view">
   <div class="landscape-timer" id="lsTimer">00:00<span style="font-size:.45em;opacity:.5">.00</span></div>
-  <button class="landscape-stop" onclick="handleStop()">&#9632; STOP</button>
+  <button class="landscape-stop" onclick="handleStop()" aria-label="Ustavi merjenje">&#9632; STOP</button>
 </div>
 
 <!-- ── MAIN APP ── -->
@@ -33,10 +33,10 @@
       <span class="logo-name">Stoparica</span>
     </div>
     <div class="topbar-actions">
-      <button class="ico-btn lit" id="soundBtn" onclick="toggleSound()" title="Zvok">&#128266;</button>
-      <button class="ico-btn" onclick="location.href='history.html'" title="Zgodovina">&#8801;</button>
-      <button class="ico-btn" id="authBtn" onclick="openAuthModal()" title="Prijava">&#128100;</button>
-      <button class="ico-btn" onclick="openSettings()" title="Nastavitve">&#9881;</button>
+      <button class="ico-btn lit" id="soundBtn" onclick="toggleSound()" title="Zvok" aria-label="Preklopi zvok">&#128266;</button>
+      <button class="ico-btn" id="historyBtn" onclick="location.href='history.html'" title="Zgodovina" aria-label="Odpri zgodovino">&#8801;</button>
+      <button class="ico-btn" id="authBtn" onclick="openAuthModal()" title="Prijava" aria-label="Prijava / račun">&#128100;</button>
+      <button class="ico-btn" id="settingsBtn" onclick="openSettings()" title="Nastavitve" aria-label="Odpri nastavitve">&#9881;</button>
     </div>
   </div>
 
@@ -73,10 +73,10 @@
 
   <!-- CONTROLS -->
   <div class="controls">
-    <button class="btn-start" id="startBtn" onclick="handleStart()">&#9654; START</button>
+    <button class="btn-start" id="startBtn" onclick="handleStart()" aria-label="Začni merjenje">&#9654; START</button>
     <div class="secondary-row">
-      <button class="btn-stop"  id="stopBtn"  onclick="handleStop()"  disabled>&#9632; STOP</button>
-      <button class="btn-reset" id="resetBtn" onclick="handleReset()" disabled>&#8634; RESET</button>
+      <button class="btn-stop"  id="stopBtn"  onclick="handleStop()"  disabled aria-label="Ustavi merjenje">&#9632; STOP</button>
+      <button class="btn-reset" id="resetBtn" onclick="handleReset()" disabled aria-label="Ponastavi uro">&#8634; RESET</button>
     </div>
   </div>
 
@@ -154,6 +154,18 @@
           <button class="ekipa-opt active" data-e="Člani-A" onclick="setEkipa(this)">Člani-A</button>
           <button class="ekipa-opt"        data-e="Člani-B" onclick="setEkipa(this)">Člani-B</button>
         </div>
+        <input class="auth-input" id="ekipaCustom" type="text" maxlength="50"
+               placeholder="Po meri (max 50 znakov)"
+               oninput="setEkipaCustom(this.value)"
+               style="margin-top:4px;font-size:13px"/>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Priprava orodja</div>
+          <div class="setting-desc" id="pripravaDesc">Odštevalnik pred startom</div>
+        </div>
+        <div class="tog" id="pripravaTog" onclick="togglePriprava()"></div>
       </div>
 
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
@@ -274,8 +286,51 @@
   </div>
 </div>
 
+<div class="auth-modal" id="bleConfirmModal">
+  <div class="panel-back"></div>
+  <div class="auth-box" style="gap:16px;text-align:center">
+    <p style="font-size:15px;line-height:1.6;margin:0">
+      ESP2 ni povezan. Ura bo shranjena brez BLE zagona.<br>
+      <strong>Boste ustavili uro ro&#269;no?</strong>
+    </p>
+    <label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer">
+      <input type="checkbox" id="bleNoShow" style="accent-color:var(--acc);width:16px;height:16px"/>
+      Ne prikazuj ve&#269; tega sporo&#269;ila
+    </label>
+    <div style="display:flex;gap:10px">
+      <button class="auth-submit" style="flex:1" onclick="bleConfirmResolve(true)">Nadaljuj</button>
+      <button class="auth-submit" style="flex:1;background:var(--s1);color:var(--text);border:1px solid var(--border)" onclick="bleConfirmResolve(false)">Prekli&#269;i</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── BROWSER WARNING (non-Chrome / no Web BT) ── -->
+<div class="auth-modal" id="browserWarnModal">
+  <div class="panel-back"></div>
+  <div class="auth-box" style="gap:18px;text-align:center;max-width:320px">
+    <div style="font-size:36px">&#9888;&#65039;</div>
+    <div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:8px">Brskalnik ni podprt</div>
+      <p style="font-size:14px;line-height:1.65;color:var(--muted);margin:0">
+        BLE (Bluetooth) deluje samo v <strong style="color:var(--text)">Google Chrome</strong> na Androidu ali namizju.<br><br>
+        V drugem brskalniku timer in zvok delujeta, BLE stop signal pa ne.
+      </p>
+    </div>
+    <button class="auth-submit" onclick="openInChrome()"
+      style="background:var(--acc);color:#111;font-weight:700">
+      &#128279; Odpri v Chromu
+    </button>
+    <button onclick="dismissBrowserWarn()"
+      style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:4px">
+      Razumem, nadaljuj brez BLE
+    </button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
+<script src="error-guard.js"></script>
+<script src="sounds.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
