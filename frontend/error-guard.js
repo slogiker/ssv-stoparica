@@ -93,12 +93,10 @@
   let missedChecks = 0;
   window.startWatchdog = function () {
     setInterval(async () => {
+      // Skip check when tab is hidden — throttled timers give false misses
+      if (document.hidden) return;
       try {
-        // 5s timeout so a slow backend doesn't count as a miss
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 5000);
-        const r = await _fetch('/api/health', { signal: ctrl.signal });
-        clearTimeout(t);
+        const r = await _fetch('/api/health');
         if (r.ok) {
           missedChecks = 0;
           banner.style.display = 'none';
@@ -108,9 +106,17 @@
       } catch {
         missedChecks++;
       }
-      // Require 3 consecutive misses (3 min) before showing the banner
+      // Require 3 consecutive visible-tab misses before showing the banner
       if (missedChecks >= 3) banner.style.display = 'block';
-    }, 60000); // check every 60s instead of 30s
+    }, 60000);
+    // Also check immediately when tab becomes visible again after being hidden
+    document.addEventListener('visibilitychange', async () => {
+      if (document.hidden) return;
+      try {
+        const r = await _fetch('/api/health');
+        if (r.ok) { missedChecks = 0; banner.style.display = 'none'; }
+      } catch {}
+    });
   };
 
   // --- Safe storage ---
