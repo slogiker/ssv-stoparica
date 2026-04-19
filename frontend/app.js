@@ -285,6 +285,8 @@ function saveRun() {
   const isPR = pr === null || elapsed < pr;
   if (isPR) pr = elapsed;
   document.getElementById('lastTime').textContent = entry.time;
+  document.getElementById('prTime').textContent = fmtFull(pr);
+  document.getElementById('prStrip').style.opacity = '1';
   const prEl = document.getElementById('lastPr');
   prEl.className = 'last-pr' + (isPR ? ' show' : '');
   if (isPR) {
@@ -302,6 +304,11 @@ function setDisc(d) {
   document.getElementById('badgeZ').className = 'badge' + (d === 'zimska' ? ' active' : '');
   document.getElementById('badgeL').className = 'badge' + (d === 'letna' ? ' active' : '');
   document.getElementById('discSelect').value = d;
+  // Keep priprava description in sync when discipline changes
+  if (pripravaOn) {
+    const durata = d === 'letna' ? '3:00' : '1:00';
+    document.getElementById('pripravaDesc').textContent = 'Odštevalnik ' + durata + ' (' + d + ')';
+  }
 }
 function discChanged() { setDisc(document.getElementById('discSelect').value); }
 
@@ -434,6 +441,20 @@ function togglePriprava() {
   document.getElementById('pripravaDesc').textContent = pripravaOn
     ? 'Odštevalnik ' + durata + ' (' + discipline + ')'
     : 'Odštevalnik pred startom';
+  // Sync main-screen quick-toggle button
+  const btn = document.getElementById('pripravaBtn');
+  if (btn) {
+    btn.className = 'btn-priprava' + (pripravaOn ? ' on' : '');
+    document.getElementById('pripravaBtnState').textContent = pripravaOn ? 'ON' : 'OFF';
+  }
+}
+
+function togglePwd(id, btn) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.classList.toggle('visible', show);
 }
 
 
@@ -525,10 +546,12 @@ function doLogout() {
   localStorage.removeItem('ssv_token');
   history = []; sessionStorage.removeItem('ssv_h');
   pr = null;
-  // Clear the last-run strip so a new guest session starts clean
+  // Clear both strips so a new guest session starts clean
   document.getElementById('lastTime').textContent = '\u2014';
+  document.getElementById('prTime').textContent = '\u2014';
   document.getElementById('lastPr').className = 'last-pr';
   document.getElementById('lastStrip').style.opacity = '.5';
+  document.getElementById('prStrip').style.opacity = '.5';
   updateAuthUI();
   showToast('Odjavljeni ste.');
 }
@@ -590,7 +613,11 @@ async function syncRunsFromServer() {
     });
     sessionStorage.setItem('ssv_h', JSON.stringify(history));
     const prRun = history.reduce((best, r) => (!best || r.ms < best.ms) ? r : best, null);
-    if (prRun) pr = prRun.ms;
+    if (prRun) {
+      pr = prRun.ms;
+      document.getElementById('prTime').textContent = fmtFull(pr);
+      document.getElementById('prStrip').style.opacity = '1';
+    }
   } catch (e) {
     showToast('Napaka pri sinhronizaciji rezultatov.');
   }
@@ -713,6 +740,11 @@ document.getElementById('darkTog').className = 'tog' + (darkOn ? ' on' : '');
 // setDisc must run before pripravaDesc so the description shows the correct discipline
 setDisc('zimska');
 document.getElementById('pripravaTog').className = 'tog' + (pripravaOn ? ' on' : '');
+const _pripravaBtn = document.getElementById('pripravaBtn');
+if (_pripravaBtn) {
+  _pripravaBtn.className = 'btn-priprava' + (pripravaOn ? ' on' : '');
+  document.getElementById('pripravaBtnState').textContent = pripravaOn ? 'ON' : 'OFF';
+}
 if (pripravaOn) {
   const durata = discipline === 'letna' ? '3:00' : '1:00';
   document.getElementById('pripravaDesc').textContent = 'Odštevalnik ' + durata + ' (' + discipline + ')';

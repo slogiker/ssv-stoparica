@@ -696,6 +696,9 @@ body {
   }
   /* Landscape view still full-width */
   .landscape-view { width:100vw; }
+  /* Timer capped to fit the 430px container — vw-based sizes overflow on wide screens */
+  .timer-main { font-size: 120px; }
+  .timer-dec  { font-size: 54px; }
 }
 
 @media (min-width:1024px) {
@@ -703,6 +706,33 @@ body {
   body { background:var(--bg); }
   .timer-area { padding:32px 32px 16px; }
 }
+
+/* Password eye toggle */
+.pwd-wrap {
+  position:relative;display:flex;align-items:center;
+}
+.pwd-wrap .auth-input { flex:1;padding-right:40px; }
+.pwd-eye {
+  position:absolute;right:10px;
+  background:none;border:none;cursor:pointer;
+  color:var(--muted);font-size:16px;padding:4px;
+  transition:color .15s;line-height:1;
+}
+.pwd-eye:hover { color:var(--text); }
+.pwd-eye.visible { color:var(--acc); }
+
+/* Priprava quick-toggle button */
+.btn-priprava {
+  width:100%;margin-top:6px;padding:10px;
+  background:var(--s1);border:1px solid var(--border);
+  color:var(--muted);font-family:var(--font-mono);font-size:10px;
+  letter-spacing:.15em;text-transform:uppercase;
+  border-radius:10px;cursor:pointer;transition:all .15s;
+}
+.btn-priprava.on {
+  border-color:var(--acc);color:var(--acc);background:rgba(212,255,0,.06);
+}
+.btn-priprava:disabled { opacity:.3;cursor:not-allowed; }
 
 @media (min-width:1400px) {
   .controls { max-width:800px; }

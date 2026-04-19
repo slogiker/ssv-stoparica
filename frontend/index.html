@@ -64,6 +64,10 @@
       <div class="badge active" id="badgeZ" onclick="setDisc('zimska')">Z &#8212; ZIMSKA</div>
       <div class="badge" id="badgeL" onclick="setDisc('letna')">L &#8212; LETNA</div>
     </div>
+    <div class="last-strip" id="prStrip" style="opacity:.5">
+      <span class="last-label">Osebni rekord</span>
+      <span class="last-time" id="prTime">&#8212;</span>
+    </div>
     <div class="last-strip" id="lastStrip" style="opacity:.5">
       <span class="last-label">Zadnji &#269;as</span>
       <span class="last-pr" id="lastPr">PR</span>
@@ -78,6 +82,7 @@
       <button class="btn-stop"  id="stopBtn"  onclick="handleStop()"  disabled aria-label="Ustavi merjenje">&#9632; STOP</button>
       <button class="btn-reset" id="resetBtn" onclick="handleReset()" disabled aria-label="Ponastavi uro">&#8634; RESET</button>
     </div>
+    <button class="btn-priprava" id="pripravaBtn" onclick="togglePriprava()" aria-label="Preklopi pripravo orodja">&#9201; PRIPRAVA <span id="pripravaBtnState">OFF</span></button>
   </div>
 
 </div>
@@ -230,8 +235,14 @@
         </div>
         <div class="acc-section-body">
           <form class="acc-form" onsubmit="submitPasswordChange(event)">
-            <input class="auth-input" id="accTrenutno" type="password" placeholder="Trenutno geslo" autocomplete="current-password" required/>
-            <input class="auth-input" id="accNovo" type="password" placeholder="Novo geslo (min. 8 znakov)" autocomplete="new-password" required minlength="8"/>
+            <div class="pwd-wrap">
+              <input class="auth-input" id="accTrenutno" type="password" placeholder="Trenutno geslo" autocomplete="current-password" required/>
+              <button type="button" class="pwd-eye" onclick="togglePwd('accTrenutno',this)" aria-label="Pokaži geslo">&#128065;</button>
+            </div>
+            <div class="pwd-wrap">
+              <input class="auth-input" id="accNovo" type="password" placeholder="Novo geslo (min. 8 znakov)" autocomplete="new-password" required minlength="8"/>
+              <button type="button" class="pwd-eye" onclick="togglePwd('accNovo',this)" aria-label="Pokaži geslo">&#128065;</button>
+            </div>
             <button class="auth-submit" type="submit">Spremeni geslo</button>
           </form>
         </div>
@@ -270,7 +281,10 @@
     <!-- Login form -->
     <form class="auth-form" id="authFormLogin" onsubmit="submitLogin(event)">
       <input class="auth-input" id="loginInput" type="text"     placeholder="Ime ali e-pošta" autocomplete="username" required/>
-      <input class="auth-input" id="loginGeslo" type="password" placeholder="Geslo"           autocomplete="current-password" required/>
+      <div class="pwd-wrap">
+        <input class="auth-input" id="loginGeslo" type="password" placeholder="Geslo" autocomplete="current-password" required/>
+        <button type="button" class="pwd-eye" onclick="togglePwd('loginGeslo',this)" aria-label="Pokaži geslo">&#128065;</button>
+      </div>
       <button class="auth-submit" type="submit">Prijava</button>
     </form>
 
@@ -278,7 +292,10 @@
     <form class="auth-form" id="authFormRegister" onsubmit="submitRegister(event)" style="display:none">
       <input class="auth-input" id="regIme"   type="text"     placeholder="Ime"       autocomplete="name"     required/>
       <input class="auth-input" id="regEmail" type="email"    placeholder="E-pošta"   autocomplete="email"    required/>
-      <input class="auth-input" id="regGeslo" type="password" placeholder="Geslo (min. 8 znakov)" autocomplete="new-password" required minlength="8"/>
+      <div class="pwd-wrap">
+        <input class="auth-input" id="regGeslo" type="password" placeholder="Geslo (min. 8 znakov)" autocomplete="new-password" required minlength="8"/>
+        <button type="button" class="pwd-eye" onclick="togglePwd('regGeslo',this)" aria-label="Pokaži geslo">&#128065;</button>
+      </div>
       <button class="auth-submit" type="submit">Ustvari račun</button>
     </form>
 
