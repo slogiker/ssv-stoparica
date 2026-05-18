@@ -9,12 +9,24 @@ let _bleConfirmResolve = null;
 let soundPlaying = false;
 let pripravaOn = localStorage.getItem('ssv_priprava') === '1';
 let _pripravaRaf = null, _pripravaEnd = null;
-let history = JSON.parse(sessionStorage.getItem('ssv_h') || '[]');
-let pr = null;
 
 // Auth state
 let authToken = localStorage.getItem('ssv_token') || null;
-let currentUser = null;
+let currentUser = localStorage.getItem('ssv_user') || null;
+let savedDevices = [];
+
+let history = JSON.parse(localStorage.getItem('ssv_h') || '[]');
+// Expiry: Guest runs only last 1 week
+if (!authToken) {
+  const oneWeek = 7 * 86400000;
+  const now = Date.now();
+  const filtered = history.filter(h => !h._ts || (now - h._ts) < oneWeek);
+  if (filtered.length !== history.length) {
+    history = filtered;
+    localStorage.setItem('ssv_h', JSON.stringify(history));
+  }
+}
+let pr = null;
 
 // ── API HELPERS ──
 const API = '/api';
@@ -263,7 +275,8 @@ function saveRun() {
     ekipa,
     disc: discipline,
     ms: elapsed,
-    time: fmtFull(elapsed)
+    time: fmtFull(elapsed),
+    _ts: Date.now()
   };
 
   if (authToken) {
@@ -281,7 +294,7 @@ function saveRun() {
 
   // Always keep local list in sync (instant UI feedback)
   history.unshift(entry);
-  sessionStorage.setItem('ssv_h', JSON.stringify(history));
+  localStorage.setItem('ssv_h', JSON.stringify(history));
   const isPR = pr === null || elapsed < pr;
   if (isPR) pr = elapsed;
   document.getElementById('lastTime').textContent = entry.time;
@@ -325,9 +338,52 @@ function getDeviceUUIDs() {
   const chrFromUrl = params.get('char');
   if (svcFromUrl) sessionStorage.setItem('ssv_svc', svcFromUrl);
   if (chrFromUrl) sessionStorage.setItem('ssv_chr', chrFromUrl);
-  const svc = sessionStorage.getItem('ssv_svc') || DEFAULT_SVC;
-  const chr = sessionStorage.getItem('ssv_chr') || DEFAULT_CHR;
-  return { svc, chr };
+
+  let svc = sessionStorage.getItem('ssv_svc');
+  let chr = sessionStorage.getItem('ssv_chr');
+
+  // If no URL/session UUIDs, use the first saved device from account
+  if (!svc && savedDevices.length > 0) {
+    svc = savedDevices[0].svc_uuid;
+    chr = savedDevices[0].char_uuid;
+  }
+
+  return { svc: svc || DEFAULT_SVC, chr: chr || DEFAULT_CHR };
+}
+
+async function fetchDevices() {
+  if (!authToken) return;
+  try {
+    savedDevices = await apiGet('/devices');
+    updateDevicesUI();
+  } catch (e) {
+    showToast('Napaka pri nalaganju naprav.');
+  }
+}
+
+async function saveCurrentDevice() {
+  const { svc, chr } = getDeviceUUIDs();
+  if (svc === DEFAULT_SVC) {
+    showToast('Ni aktivne naprave za shranjevanje.');
+    return;
+  }
+  try {
+    await apiPost('/devices', { svc_uuid: svc, char_uuid: chr, friendly_name: bleDevice ? bleDevice.name : 'Moja naprava' });
+    showToast('Naprava shranjena v račun.');
+    fetchDevices();
+  } catch (e) {
+    showToast(e.message);
+  }
+}
+
+async function removeDevice(id) {
+  try {
+    await apiDelete('/devices/' + id);
+    showToast('Naprava odstranjena.');
+    fetchDevices();
+  } catch (e) {
+    showToast(e.message);
+  }
 }
 
 function setDot(state, label) {
@@ -412,6 +468,14 @@ function toggleSound() {
 function toggleHaptic() {
   hapticOn = !hapticOn;
   document.getElementById('hapticTog').className = 'tog' + (hapticOn ? ' on' : '');
+  updateHapticUI();
+}
+function updateHapticUI() {
+  const slider = document.getElementById('hapticSlider');
+  if (slider) {
+    slider.disabled = !hapticOn;
+    slider.style.opacity = hapticOn ? '1' : '0.4';
+  }
 }
 function toggleDark() {
   darkOn = !darkOn;
@@ -428,7 +492,12 @@ function setEkipa(el) {
 }
 
 function setEkipaCustom(val) {
-  if (!val.trim()) return;
+  if (!val.trim()) {
+    ekipa = 'Člani-A';
+    localStorage.setItem('ssv_ekipa', ekipa);
+    document.querySelectorAll('.ekipa-opt').forEach(b => b.classList.toggle('active', b.dataset.e === ekipa));
+    return;
+  }
   ekipa = val.trim().slice(0, 50);
   localStorage.setItem('ssv_ekipa', ekipa);
   document.querySelectorAll('.ekipa-opt').forEach(b => b.classList.remove('active'));
@@ -512,13 +581,53 @@ function exportCSV() {
 }
 
 // ── AUTH ──
+// ── MIGRATION ──
+let _migrationResolve = null;
+function checkMigration() {
+  const stored = JSON.parse(localStorage.getItem('ssv_h') || '[]');
+  if (!stored.length) return;
+  document.getElementById('migrationText').textContent = `Našli smo ${stored.length} shranjenih rezultatov iz tega tedna. Jih želite prenesti na svoj račun?`;
+  document.getElementById('migrationModal').classList.add('open');
+  return new Promise(resolve => { _migrationResolve = resolve; });
+}
+async function resolveMigration(confirm) {
+  document.getElementById('migrationModal').classList.remove('open');
+  if (confirm) {
+    const stored = JSON.parse(localStorage.getItem('ssv_h') || '[]');
+    const failed = [];
+    for (const item of stored) {
+      try {
+        await apiPost('/runs', {
+          ekipa: item.ekipa,
+          disciplina: item.disc,
+          cas_s: parseFloat((item.ms / 1000).toFixed(3))
+        });
+      } catch { failed.push(item); }
+    }
+    if (failed.length) {
+      localStorage.setItem('ssv_h', JSON.stringify(failed));
+      showToast(`Napaka pri prenosu ${failed.length} vnosov.`);
+    } else {
+      localStorage.removeItem('ssv_h');
+      showToast('Rezultati uspešno preneseni.');
+    }
+    syncRunsFromServer();
+  } else {
+    localStorage.removeItem('ssv_h');
+    showToast('Lokalni rezultati izbrisani.');
+  }
+  if (_migrationResolve) { _migrationResolve(); _migrationResolve = null; }
+}
+
 async function doLogin(login, geslo) {
   try {
     const data = await apiPost('/auth/login', { login, geslo });
     authToken = data.token;
     currentUser = data.ime;
     localStorage.setItem('ssv_token', authToken);
+    localStorage.setItem('ssv_user', currentUser);
     closeAuthModal();
+    await checkMigration();
     updateAuthUI();
     showToast('Dobrodošel, ' + currentUser + '!');
     syncRunsFromServer();
@@ -533,7 +642,9 @@ async function doRegister(ime, email, geslo) {
     authToken = data.token;
     currentUser = data.ime;
     localStorage.setItem('ssv_token', authToken);
+    localStorage.setItem('ssv_user', currentUser);
     closeAuthModal();
+    await checkMigration();
     updateAuthUI();
     showToast('Registracija uspešna. Dobrodošel, ' + currentUser + '!');
   } catch (e) {
@@ -544,7 +655,8 @@ async function doRegister(ime, email, geslo) {
 function doLogout() {
   authToken = null; currentUser = null;
   localStorage.removeItem('ssv_token');
-  history = []; sessionStorage.removeItem('ssv_h');
+  localStorage.removeItem('ssv_user');
+  history = []; localStorage.removeItem('ssv_h');
   pr = null;
   // Clear both strips so a new guest session starts clean
   document.getElementById('lastTime').textContent = '\u2014';
@@ -580,18 +692,71 @@ async function flushOfflineQueue() {
   }
 }
 
+function updateSidebarHistory() {
+  const container = document.getElementById('miniHistory');
+  if (!container) return;
+  if (!history.length) {
+    container.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--muted);font-size:12px">Ni rezultatov</div>';
+    return;
+  }
+  container.innerHTML = '';
+  // Show last 20 runs
+  history.slice(0, 20).forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'hv-run-item';
+    el.innerHTML = `
+      <div class="hv-run-body">
+        <span class="hv-run-time">${r.time}</span>
+        <span class="hv-run-meta">${r.ekipa} · ${r.disc === 'zimska' ? 'Zimska' : 'Letna'} · ${r.datum.split(',')[0]}</span>
+      </div>`;
+    container.appendChild(el);
+  });
+}
+
+function updateDevicesUI() {
+  const container = document.getElementById('accDeviceList');
+  if (!container) return;
+  if (!savedDevices.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">Ni shranjenih naprav.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  savedDevices.forEach(dev => {
+    const el = document.createElement('div');
+    el.className = 'setting-row';
+    el.style.padding = '10px 20px';
+    el.innerHTML = `
+      <div class="setting-info">
+        <div class="setting-name" style="font-size:13px">${dev.friendly_name || 'Neznana naprava'}</div>
+        <div class="setting-desc">${dev.svc_uuid.slice(0, 8)}...</div>
+      </div>
+      <button class="ico-btn" onclick="removeDevice(${dev.id})" style="color:var(--danger);border-color:var(--border)">&#128465;</button>
+    `;
+    container.appendChild(el);
+  });
+}
+
 function updateAuthUI() {
   const btn = document.getElementById('authBtn');
+  const saveBtn = document.getElementById('btnSaveDevice');
+  const adminRow = document.getElementById('adminRow');
   if (currentUser) {
     btn.textContent = currentUser.slice(0, 2).toUpperCase();
     btn.classList.add('lit');
     btn.title = 'Račun (' + currentUser + ')';
     btn.onclick = openAccountModal;
+    if (saveBtn) saveBtn.style.display = '';
+    const isAdmin = ['slogiker', 'admin'].includes(currentUser.toLowerCase());
+    if (adminRow) adminRow.style.display = isAdmin ? 'flex' : 'none';
+    fetchDevices();
   } else {
     btn.innerHTML = '&#128100;';
     btn.classList.remove('lit');
     btn.title = 'Prijava / Registracija';
     btn.onclick = openAuthModal;
+    if (saveBtn) saveBtn.style.display = 'none';
+    if (adminRow) adminRow.style.display = 'none';
+    savedDevices = [];
   }
 }
 
@@ -603,8 +768,8 @@ async function syncRunsFromServer() {
       const iso = r.datum.replace(' ', 'T');
       return {
         id: r.id,
-        datum: new Date(iso).toLocaleString('sl-SI'),
-        datumIso: new Date(iso).toISOString(),
+        datum: new Date(iso + 'Z').toLocaleString('sl-SI'),
+        datumIso: new Date(iso + 'Z').toISOString(),
         ekipa: r.ekipa || '—',
         disc: r.disciplina,
         ms: Math.round(r.cas_s * 1000),
@@ -650,6 +815,7 @@ async function submitProfileChange(e) {
     authToken = data.token;
     currentUser = data.ime;
     localStorage.setItem('ssv_token', authToken);
+    localStorage.setItem('ssv_user', currentUser);
     updateAuthUI();
     _updateAccPanel();
     showToast('Ime posodobljeno.');
@@ -711,13 +877,31 @@ function submitRegister(e) {
 // ── BROWSER COMPATIBILITY WARNING ──
 function openInChrome() {
   const url = location.href;
-  // Android intent URI — opens current URL in Chrome
-  const intent = 'intent://' + url.replace(/^https?:\/\//, '') +
-    '#Intent;scheme=' + location.protocol.replace(':', '') +
-    ';package=com.android.chrome;end';
-  try { location.href = intent; } catch (e) { }
-  // Fallback: copy URL hint
-  setTimeout(() => showToast('Kopirajte URL in odprite v Chromu'), 800);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isAndroid) {
+    // Android intent URI — opens current URL specifically in Chrome
+    const intent = 'intent://' + url.replace(/^https?:\/\//, '') +
+      '#Intent;scheme=' + location.protocol.replace(':', '') +
+      ';package=com.android.chrome;end';
+    try { location.href = intent; } catch (e) { }
+  } else if (isIOS) {
+    // Try to open in Chrome on iOS using the googlechromes:// scheme
+    const chromeUrl = url.replace(/^http/, 'googlechrome');
+    try { location.href = chromeUrl; } catch (e) { }
+  }
+
+  // Common fallback/helper for PC or if schemes fail: Copy URL to clipboard
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('Povezava kopirana. Odprite jo v Chromu.');
+    }).catch(() => {
+      showToast('Kopirajte URL in odprite v Chromu.');
+    });
+  } else {
+    showToast('Kopirajte URL in odprite v Chromu.');
+  }
 }
 function dismissBrowserWarn() {
   sessionStorage.setItem('ssv_bwarn', '1');
@@ -737,6 +921,7 @@ if (!navigator.bluetooth && sessionStorage.getItem('ssv_bwarn') !== '1') {
 }
 if (!darkOn) document.body.classList.add('light');
 document.getElementById('darkTog').className = 'tog' + (darkOn ? ' on' : '');
+updateHapticUI();
 // setDisc must run before pripravaDesc so the description shows the correct discipline
 setDisc('zimska');
 document.getElementById('pripravaTog').className = 'tog' + (pripravaOn ? ' on' : '');

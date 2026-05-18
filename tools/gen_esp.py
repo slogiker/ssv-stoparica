@@ -46,6 +46,7 @@ def next_device_letter():
 def main():
     parser = argparse.ArgumentParser(description="Provision a new SSV-STOP ESP32 device")
     parser.add_argument("--letter", metavar="X", help="Device letter (default: next available)")
+    parser.add_argument("--name", "-n", help="Custom name/label for the device (e.g. PGD-Podnanos-1)")
     parser.add_argument("--domain", default="ssv.slogiker.si", help="Production domain for QR URL")
     args = parser.parse_args()
 
@@ -100,11 +101,13 @@ def main():
     img.save(str(qr_path))
 
     # ── Info file ────────────────────────────────────────────────────────────
+    custom_name = args.name or "N/A"
     info_path = out_dir / f"INFO_{device_name}.txt"
     info_path.write_text(
         f"SSV Stoparica — Device Info\n"
         f"{'='*60}\n\n"
         f"Device name      : {device_name}\n"
+        f"Custom label     : {custom_name}\n"
         f"Service UUID     : {svc_uuid}\n"
         f"Characteristic   : {chr_uuid}\n\n"
         f"QR URL           : {url}\n\n"

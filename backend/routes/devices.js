@@ -8,13 +8,13 @@ const router = express.Router();
 const UUID_RE = /^([0-9a-f]{4}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 // POST /api/devices
-// Body: { uuid, friendly_name }
+// Body: { svc_uuid, char_uuid, friendly_name }
 router.post('/', (req, res) => {
-  const { uuid, friendly_name } = req.body;
-  if (!uuid) {
-    return res.status(400).json({ napaka: 'UUID naprave je obvezen.' });
+  const { svc_uuid, char_uuid, friendly_name } = req.body;
+  if (!svc_uuid || !char_uuid) {
+    return res.status(400).json({ napaka: 'Oba UUID-ja (service in characteristic) sta obvezna.' });
   }
-  if (!UUID_RE.test(uuid)) {
+  if (!UUID_RE.test(svc_uuid) || !UUID_RE.test(char_uuid)) {
     return res.status(400).json({ napaka: 'UUID naprave ni v veljavni obliki.' });
   }
   if (friendly_name && (typeof friendly_name !== 'string' || friendly_name.length > 100)) {
@@ -22,15 +22,15 @@ router.post('/', (req, res) => {
   }
   // Prevent duplicates per user
   const existing = db.prepare(
-    'SELECT id FROM devices WHERE user_id = ? AND uuid = ?'
-  ).get(req.user.id, uuid);
+    'SELECT id FROM devices WHERE user_id = ? AND svc_uuid = ? AND char_uuid = ?'
+  ).get(req.user.id, svc_uuid, char_uuid);
   if (existing) {
     return res.status(409).json({ napaka: 'Ta naprava je že shranjena.' });
   }
   try {
     const result = db.prepare(
-      'INSERT INTO devices (user_id, uuid, friendly_name) VALUES (?, ?, ?)'
-    ).run(req.user.id, uuid, friendly_name || null);
+      'INSERT INTO devices (user_id, svc_uuid, char_uuid, friendly_name) VALUES (?, ?, ?, ?)'
+    ).run(req.user.id, svc_uuid, char_uuid, friendly_name || null);
     const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(device);
   } catch (e) {

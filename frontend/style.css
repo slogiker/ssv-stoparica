@@ -13,8 +13,8 @@
   --font-disp: 'Bebas Neue', sans-serif;
   --font-mono: 'DM Mono', monospace;
   --font-sans: 'DM Sans', sans-serif;
-  --topbar-h:  56px;
-  --status-h:  44px;
+  --topbar-h:  64px;
+  --status-h:  52px;
   --ctrl-h:    140px;
 }
 .light {
@@ -125,7 +125,7 @@ body {
 .ble-pill {
   display:flex;align-items:center;gap:6px;
   background:var(--s2);border:1px solid var(--border);border-radius:20px;
-  padding:4px 10px 4px 8px;cursor:pointer;transition:all .2s;
+  padding:6px 12px 6px 10px;cursor:pointer;transition:all .2s;
   flex:0 1 auto;min-width:0;max-width:180px;
 }
 .ble-pill:hover { border-color:var(--acc); }
@@ -145,7 +145,7 @@ body {
 .stat-pill {
   flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
   font-family:var(--font-mono);font-size:clamp(11px,2vw,13px);color:var(--muted);
-  background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:4px 10px;
+  background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:6px 10px;
 }
 .stat-pill .val { color:var(--text);font-weight:500; }
 
@@ -153,7 +153,7 @@ body {
 .timer-area {
   flex:1;min-height:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:clamp(8px,2vw,24px) clamp(12px,4vw,48px);
+  padding:clamp(20px,5vw,40px) clamp(12px,4vw,48px);
   position:relative;overflow:hidden;
 }
 .timer-glow {
@@ -419,9 +419,6 @@ body {
   display:flex;flex-direction:column;
   height:100dvh;width:100%;
 }
-@media (min-width:1024px) {
-  .history-page { max-width:1400px;margin:0 auto; }
-}
 
 /* Stats page body */
 .stats-page-body {
@@ -675,36 +672,72 @@ body {
 }
 .toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
 
-/* ── DESKTOP: centered phone-width layout ── */
+/* ── DESKTOP OPTIMIZATION ── */
 @media (min-width:600px) {
   body {
-    flex-direction:row;
-    justify-content:center;
-    align-items:stretch;
-    overflow:auto;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    overflow-y: auto;
   }
   .app {
-    width:430px;
-    max-width:430px;
-    min-width:320px;
-    flex-shrink:0;
-    height:auto;
-    min-height:100dvh;
-    border-left:1px solid var(--border);
-    border-right:1px solid var(--border);
-    box-shadow:0 0 60px rgba(0,0,0,.5);
+    width: 100%;
+    max-width: 100%;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    container-type: inline-size;
   }
-  /* Landscape view still full-width */
-  .landscape-view { width:100vw; }
-  /* Timer capped to fit the 430px container — vw-based sizes overflow on wide screens */
-  .timer-main { font-size: 120px; }
-  .timer-dec  { font-size: 54px; }
+  
+  .timer-area {
+    padding: 8vh 5vw;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Font scales with container but at a smaller ratio so it's not 'too big' */
+  .timer-main { 
+    font-size: clamp(100px, 16cqw, 320px); 
+  }
+  .timer-dec { 
+    font-size: clamp(40px, 6.5cqw, 140px); 
+    margin-bottom: 1.5vh;
+  }
+
+  .controls, .last-strip {
+    width: 90%;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .controls {
+    padding-bottom: 6vh;
+  }
+  
+  .btn-start {
+    font-size: clamp(16px, 1.8cqw, 24px);
+    padding: clamp(20px, 3cqw, 36px);
+  }
+
+  .landscape-view { width: 100vw; height: 100vh; }
+}
+
+@media (min-width:1400px) {
+  .main-sidebar { width: 440px; }
+}
+
+@media (max-width:599px) {
+  .main-sidebar { display: none; }
 }
 
 @media (min-width:1024px) {
-  :root { --topbar-h:60px; --status-h:44px; }
-  body { background:var(--bg); }
-  .timer-area { padding:32px 32px 16px; }
+  :root { --topbar-h:64px; --status-h:48px; }
+  .history-page { max-width: 100%; }
 }
 
 /* Password eye toggle */
@@ -733,15 +766,6 @@ body {
   border-color:var(--acc);color:var(--acc);background:rgba(212,255,0,.06);
 }
 .btn-priprava:disabled { opacity:.3;cursor:not-allowed; }
-
-@media (min-width:1400px) {
-  .controls { max-width:800px; }
-}
-
-@media (min-width:1400px) {
-  .timer-main { font-size:clamp(120px,14vw,200px); }
-  .timer-dec  { font-size:clamp(56px,6vw,96px); }
-}
 
 /* ── SCROLLBARS ── */
 ::-webkit-scrollbar { width:5px;height:5px; }

@@ -49,8 +49,8 @@ async function loadRuns() {
         const iso = r.datum.replace(' ', 'T');
         return {
           id: r.id,
-          datum: new Date(iso).toLocaleString('sl-SI'),
-          datumIso: new Date(iso).toISOString(),
+          datum: new Date(iso + 'Z').toLocaleString('sl-SI'),
+          datumIso: new Date(iso + 'Z').toISOString(),
           ekipa: r.ekipa || '—',
           disc: r.disciplina,
           ms: Math.round((r.cas_s || 0) * 1000),
@@ -61,14 +61,48 @@ async function loadRuns() {
       showToast('Napaka pri nalaganju rezultatov.');
     }
   } else {
-    // Guest: read from sessionStorage
-    runs = JSON.parse(sessionStorage.getItem('ssv_h') || '[]').map(r => ({
+    // Guest: read from localStorage
+    let stored = JSON.parse(localStorage.getItem('ssv_h') || '[]');
+    const oneWeek = 7 * 86400000;
+    const now = Date.now();
+    const filtered = stored.filter(h => !h._ts || (now - h._ts) < oneWeek);
+    if (filtered.length !== stored.length) {
+      stored = filtered;
+      localStorage.setItem('ssv_h', JSON.stringify(stored));
+    }
+    runs = stored.map(r => ({
       ...r,
       ms: Math.round((r.ms || 0)),
       datumIso: r.datumIso || r.datum
     }));
   }
   buildHistoryView();
+  buildTeamFilters();
+}
+
+// ── DYNAMIC FILTERS ──
+function buildTeamFilters() {
+  const containers = document.querySelectorAll('.hv-team-filters-container');
+  if (!containers.length) return;
+
+  // Get unique teams from runs, excluding '—'
+  const usedTeams = [...new Set(runs.map(r => r.ekipa))].filter(t => t && t !== '—' && t !== 'Vse');
+  // Combine with defaults
+  const teams = ['Člani-A', 'Člani-B', ...usedTeams.filter(t => t !== 'Člani-A' && t !== 'Člani-B')];
+
+  containers.forEach(container => {
+    const activeVal = hvTeam;
+    container.innerHTML = `<div class="hv-radio-option${activeVal === 'all' ? ' active' : ''}" data-team="all" onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>`;
+    
+    teams.forEach(team => {
+      const el = document.createElement('div');
+      el.className = 'hv-radio-option' + (activeVal === team ? ' active' : '');
+      el.dataset.team = team;
+      el.onclick = () => setHvTeam(el);
+      el.innerHTML = `<div class="hv-radio-dot"></div><span class="hv-radio-label">${team}</span>`;
+      container.appendChild(el);
+    });
+  });
 }
 
 // ── FILTER & SORT ──
@@ -172,7 +206,7 @@ function getCategoryLabel(key) {
   // YYYY-MM-DD → "Ponedeljek (14.12.2025)" or "Ponedeljek (14.12.)" for current year
   if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
     const d = new Date(key + 'T00:00:00');
-    const days = ['Nedelja', 'Ponedeljek', 'Torek', 'Sreda', '\u010cetrtek', 'Petek', 'Sobota'];
+    const days = ['Nedelja', 'Ponedeljek', 'Torek', 'Sreda', 'Četrtek', 'Petek', 'Sobota'];
     const day = days[d.getDay()];
     const dd = d.getDate() + '.' + (d.getMonth() + 1) + '.';
     const yr = d.getFullYear();
@@ -326,9 +360,9 @@ async function deleteSelected() {
     }
     if (failed.length) showToast('Napaka pri brisanju ' + failed.length + ' vnosov.');
   } else {
-    // Guest: remove from sessionStorage
-    const stored = JSON.parse(sessionStorage.getItem('ssv_h') || '[]');
-    sessionStorage.setItem('ssv_h', JSON.stringify(stored.filter(r => !ids.includes(r.id))));
+    // Guest: remove from localStorage
+    const stored = JSON.parse(localStorage.getItem('ssv_h') || '[]');
+    localStorage.setItem('ssv_h', JSON.stringify(stored.filter(r => !ids.includes(r.id))));
   }
 
   runs = runs.filter(r => !ids.includes(r.id));
@@ -349,7 +383,10 @@ function setHvDisc(el) {
 }
 function setHvTeam(el) {
   document.querySelectorAll('[data-team]').forEach(e => e.classList.remove('active'));
-  el.classList.add('active'); hvTeam = el.dataset.team; buildHistoryView();
+  hvTeam = el.dataset.team;
+  // Re-sync all UI options with this value
+  document.querySelectorAll(`[data-team="${hvTeam}"]`).forEach(e => e.classList.add('active'));
+  buildHistoryView();
 }
 function setHvSort(el) {
   document.querySelectorAll('[data-sort]').forEach(e => e.classList.remove('active'));
@@ -365,15 +402,33 @@ function closeFilterOverlay() {
 }
 
 // ── CHART (Catmull-Rom → Cubic Bezier) ──
-// items: array of {ms, datum, ekipa, disc} sorted chronologically
+let _hvResizeObserver = null;
+let _currentChartItems = [];
+
 function renderChart(items) {
+  _currentChartItems = items;
   const svg = document.getElementById('hvChart');
   const wrap = svg && svg.closest('.hv-chart-wrap');
   if (!svg || !wrap) return;
-  // Read the accent colour from the current theme so the chart respects light mode.
+
+  if (!_hvResizeObserver) {
+    _hvResizeObserver = new ResizeObserver(() => drawChart(_currentChartItems));
+    _hvResizeObserver.observe(wrap);
+  }
+  drawChart(_currentChartItems);
+}
+
+function drawChart(items) {
+  const svg = document.getElementById('hvChart');
+  const wrap = svg && svg.closest('.hv-chart-wrap');
+  if (!svg || !wrap) return;
+
+  const rect = wrap.getBoundingClientRect();
+  const W = rect.width || 420;
+  const H = rect.height || 160;
+
   const acc = getComputedStyle(document.body).getPropertyValue('--acc').trim() || '#d4ff00';
 
-  // Ensure tooltip element
   let tip = wrap.querySelector('.ct');
   if (!tip) {
     tip = document.createElement('div');
@@ -381,7 +436,7 @@ function renderChart(items) {
     wrap.appendChild(tip);
   }
 
-  const W = 420, H = 160, PL = 62, PR = 8, PT = 8, PB = 26;
+  const PL = 62, PR = 8, PT = 8, PB = 26;
 
   if (items.length < 2) {
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -416,13 +471,11 @@ function renderChart(items) {
   const gid = 'g' + Math.random().toString(36).slice(2, 7);
   const showDots = items.length <= 18;
 
-  // 4 Y ticks
   const yTicks = [0, 0.33, 0.67, 1].map(t => {
     const v = minV + t * range;
     return { y: toY(v), label: fmtFull(Math.round(v)) };
   });
 
-  // 3 X date labels (sl-SI locale gives "2. 4. 2026, 14:30:00" — take before comma)
   const xi = [0, Math.floor((items.length - 1) / 2), items.length - 1];
   const xLabels = xi.map(i => ({ x: toX(i), label: items[i].datum.split(',')[0] }));
 
@@ -464,15 +517,15 @@ function renderChart(items) {
   const hitzone = document.getElementById('hvHitzone');
 
   function pickPoint(clientX) {
-    const rect = svg.getBoundingClientRect();
-    const svgX = ((clientX - rect.left) / rect.width) * W;
+    const rct = svg.getBoundingClientRect();
+    const svgX = ((clientX - rct.left) / rct.width) * W;
     let best = 0, bestD = Infinity;
     pts.forEach((p, i) => { const d = Math.abs(p.x - svgX); if (d < bestD) { bestD = d; best = i; } });
-    return { idx: best, pt: pts[best], rect };
+    return { idx: best, pt: pts[best], rct };
   }
 
   function showTip(clientX) {
-    const { pt, rect } = pickPoint(clientX);
+    const { pt, rct } = pickPoint(clientX);
     crosshair.setAttribute('x1', pt.x.toFixed(1));
     crosshair.setAttribute('x2', pt.x.toFixed(1));
     crosshair.setAttribute('opacity', '0.45');
@@ -483,8 +536,8 @@ function renderChart(items) {
     tip.innerHTML = `<span class="ct-time">${fmtFull(pt.ms)}</span>`
       + `<span class="ct-meta">${shortDate} · ${pt.ekipa}</span>`;
     tip.style.opacity = '1';
-    const relX = (pt.x / W) * rect.width;
-    const relY = (pt.y / H) * rect.height;
+    const relX = (pt.x / W) * rct.width;
+    const relY = (pt.y / H) * rct.height;
     const tw = tip.offsetWidth || 110;
     const wrapW = wrap.offsetWidth || W;
     let left = relX - tw / 2;
@@ -500,10 +553,14 @@ function renderChart(items) {
     tip.style.opacity = '0';
   }
 
-  hitzone.addEventListener('mousemove', e => showTip(e.clientX));
-  hitzone.addEventListener('mouseleave', hideTip);
-  hitzone.addEventListener('touchmove', e => { e.preventDefault(); showTip(e.touches[0].clientX); }, { passive: false });
-  hitzone.addEventListener('touchend', hideTip);
+  // Remove old listeners to avoid duplicates on redraw
+  const newHitzone = hitzone.cloneNode(true);
+  hitzone.parentNode.replaceChild(newHitzone, hitzone);
+  
+  newHitzone.addEventListener('mousemove', e => showTip(e.clientX));
+  newHitzone.addEventListener('mouseleave', hideTip);
+  newHitzone.addEventListener('touchmove', e => { e.preventDefault(); showTip(e.touches[0].clientX); }, { passive: false });
+  newHitzone.addEventListener('touchend', hideTip);
 }
 
 // ── CSV EXPORT ──

@@ -18,6 +18,9 @@ const devicesRoutes = require('./routes/devices');
 const app = express();
 const PORT = process.env.PORT || 4827;
 
+// Trust the first proxy (Nginx) for express-rate-limit to correctly identify IPs
+app.set('trust proxy', 1);
+
 // CORS: allow only the production origin (or any origin in local dev).
 // In production this runs behind nginx on the same origin — CORS headers
 // are only relevant if the API is ever called cross-origin (e.g. mobile app).
@@ -39,7 +42,7 @@ const authLimiter = rateLimit({
 app.use('/api/auth/login',    authLimiter);
 app.use('/api/auth/register', authLimiter);
 
-app.get('/health', (req, res) => res.json({ ok: true }));
+app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/runs', requireAuth, runsRoutes);

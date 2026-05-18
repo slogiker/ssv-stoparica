@@ -2,7 +2,7 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "8742:80"
+      - "8081:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./frontend:/usr/share/nginx/html:ro
@@ -23,7 +23,7 @@ services:
       - "4827:4827"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4827/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4827/api/health"]
       interval: 5s
       timeout: 3s
       retries: 10

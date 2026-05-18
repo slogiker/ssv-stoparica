@@ -52,24 +52,24 @@
     </div>
   </div>
 
-  <!-- TIMER -->
+  <!-- TIMER AREA -->
   <div class="timer-area">
     <div class="timer-glow" id="timerGlow"></div>
-    <div class="timer-label" id="timerLabel">&#268;AKANJE NA START</div>
+    <div class="timer-label" id="timerLabel">ČAKANJE NA START</div>
     <div class="timer-wrap" id="timerWrap">
       <div class="timer-main" id="timerMain">00:00</div>
       <div class="timer-dec"  id="timerDec">.00</div>
     </div>
     <div class="disc-badge">
-      <div class="badge active" id="badgeZ" onclick="setDisc('zimska')">Z &#8212; ZIMSKA</div>
-      <div class="badge" id="badgeL" onclick="setDisc('letna')">L &#8212; LETNA</div>
+      <div class="badge active" id="badgeZ" onclick="setDisc('zimska')">Z — ZIMSKA</div>
+      <div class="badge" id="badgeL" onclick="setDisc('letna')">L — LETNA</div>
     </div>
     <div class="last-strip" id="prStrip" style="opacity:.5">
       <span class="last-label">Osebni rekord</span>
       <span class="last-time" id="prTime">&#8212;</span>
     </div>
     <div class="last-strip" id="lastStrip" style="opacity:.5">
-      <span class="last-label">Zadnji &#269;as</span>
+      <span class="last-label">Zadnji čas</span>
       <span class="last-pr" id="lastPr">PR</span>
       <span class="last-time" id="lastTime">&#8212;</span>
     </div>
@@ -77,12 +77,12 @@
 
   <!-- CONTROLS -->
   <div class="controls">
-    <button class="btn-start" id="startBtn" onclick="handleStart()" aria-label="Začni merjenje">&#9654; START</button>
+    <button class="btn-start" id="startBtn" onclick="handleStart()" aria-label="Začni merjenje">▶ START</button>
     <div class="secondary-row">
-      <button class="btn-stop"  id="stopBtn"  onclick="handleStop()"  disabled aria-label="Ustavi merjenje">&#9632; STOP</button>
-      <button class="btn-reset" id="resetBtn" onclick="handleReset()" disabled aria-label="Ponastavi uro">&#8634; RESET</button>
+      <button class="btn-stop"  id="stopBtn"  onclick="handleStop()"  disabled aria-label="Ustavi merjenje">■ STOP</button>
+      <button class="btn-reset" id="resetBtn" onclick="handleReset()" disabled aria-label="Ponastavi uro">↺ RESET</button>
     </div>
-    <button class="btn-priprava" id="pripravaBtn" onclick="togglePriprava()" aria-label="Preklopi pripravo orodja">&#9201; PRIPRAVA <span id="pripravaBtnState">OFF</span></button>
+    <button class="btn-priprava" id="pripravaBtn" onclick="togglePriprava()" aria-label="Preklopi pripravo orodja">⏲ PRIPRAVA <span id="pripravaBtnState">OFF</span></button>
   </div>
 
 </div>
@@ -142,7 +142,7 @@
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
         <div class="setting-info">
           <div class="setting-name">Disciplina</div>
-          <div class="setting-desc">Dolo&#269;i start zvok</div>
+          <div class="setting-desc">Določi start zvok</div>
         </div>
         <select class="setting-select" id="discSelect" onchange="discChanged()">
           <option value="zimska">Zimska liga</option>
@@ -178,10 +178,23 @@
           <div class="setting-name">BLE naprava</div>
           <div class="setting-desc" id="bleDeviceDesc">Ni shranjene naprave</div>
         </div>
-        <button class="setting-select" onclick="forgetDevice()"
-          style="cursor:pointer;color:var(--danger);border-color:var(--danger);text-align:left">
-          Pozabi napravo
-        </button>
+        <div style="display:flex;gap:8px">
+          <button class="setting-select" onclick="saveCurrentDevice()" id="btnSaveDevice"
+            style="cursor:pointer;color:var(--acc);border-color:var(--acc);text-align:center;flex:1;margin:0">
+            Shrani v račun
+          </button>
+          <button class="setting-select" onclick="forgetDevice()"
+            style="cursor:pointer;color:var(--danger);border-color:var(--danger);text-align:center;flex:1;margin:0">
+            Pozabi
+          </button>
+        </div>
+      </div>
+      <div class="setting-row" id="adminRow" style="display:none">
+        <div class="setting-info">
+          <div class="setting-name">Admin</div>
+          <div class="setting-desc">Provisioning & Flashing</div>
+        </div>
+        <button class="ico-btn" onclick="location.href='admin.html'">&#9881;</button>
       </div>
 
       <a class="github-row" href="https://github.com/slogiker/ssv-stoparica" target="_blank" style="margin-top:16px">
@@ -192,6 +205,9 @@
         </div>
       </a>
 
+      <div style="margin-top:auto;padding:24px 0 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.05em">
+        made by <a href="https://github.com/slogiker" target="_blank" style="color:var(--acc);text-decoration:none">slogiker</a>
+      </div>
     </div>
   </div>
 </div>
@@ -201,7 +217,7 @@
   <div class="panel-back" onclick="closeAccountModal()"></div>
   <div class="panel-body">
     <div class="panel-header">
-      <span class="panel-title">Moj ra&#269;un</span>
+      <span class="panel-title">Moj račun</span>
       <button class="panel-close" onclick="closeAccountModal()">&#10005;</button>
     </div>
     <div class="panel-content" style="padding:0;display:flex;flex-direction:column;gap:0">
@@ -211,6 +227,18 @@
         <div class="acc-avatar" id="accAvatar"></div>
         <div class="acc-name" id="accDisplayName"></div>
         <button class="acc-logout-btn" onclick="doLogout();closeAccountModal()">Odjava</button>
+      </div>
+
+      <!-- Saved devices -->
+      <div class="acc-section" id="accSecDevices">
+        <div class="acc-section-hdr" onclick="toggleAccSection('accSecDevices')">
+          <span class="acc-section-title">Shranjene naprave (ESP2)</span>
+          <span class="acc-section-arrow">&#8250;</span>
+        </div>
+        <div class="acc-section-body" id="accDeviceList">
+          <!-- Populated by updateDevicesUI() -->
+          <div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">Ni shranjenih naprav.</div>
+        </div>
       </div>
 
       <!-- Change name -->
@@ -251,20 +279,23 @@
       <!-- Delete account -->
       <div class="acc-section" id="accSecDelete">
         <div class="acc-section-hdr" onclick="toggleAccSection('accSecDelete')">
-          <span class="acc-section-title" style="color:var(--danger)">Nevarno obmo&#269;je</span>
+          <span class="acc-section-title" style="color:var(--danger)">Nevarno območje</span>
           <span class="acc-section-arrow" style="color:var(--danger)">&#8250;</span>
         </div>
         <div class="acc-section-body">
           <p style="font-size:12px;color:var(--muted);line-height:1.5;margin:0">
-            Trajno bri&#353;e&#353; ra&#269;un in vse rezultate. Tega dejanja ni mogo&#269;e razveljaviti.
+            Trajno brišeš račun in vse rezultate. Tega dejanja ni mogoče razveljaviti.
           </p>
           <button class="auth-submit" style="background:var(--danger);color:#fff" onclick="submitDeleteAccount()">
-            Izbri&#353;i ra&#269;un in podatke
+            Izbriši račun in podatke
           </button>
         </div>
       </div>
 
       <div class="auth-error" id="accError" style="padding:8px 20px"></div>
+      <div style="margin-top:auto;padding:24px 0 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:.05em">
+        made by <a href="https://github.com/slogiker" target="_blank" style="color:var(--acc);text-decoration:none">slogiker</a>
+      </div>
     </div>
   </div>
 </div>
@@ -303,20 +334,35 @@
   </div>
 </div>
 
+<!-- ── MIGRATION MODAL ── -->
+<div class="auth-modal" id="migrationModal">
+  <div class="panel-back"></div>
+  <div class="auth-box" style="gap:16px;text-align:center">
+    <div style="font-size:32px">&#128229;</div>
+    <p style="font-size:15px;line-height:1.6;margin:0" id="migrationText">
+      Našli smo X shranjenih rezultatov iz tega tedna. Jih želite prenesti na svoj račun?
+    </p>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="auth-submit" style="flex:1" onclick="resolveMigration(true)">Da, prenesi</button>
+      <button class="auth-submit" style="flex:1;background:var(--s1);color:var(--text);border:1px solid var(--border)" onclick="resolveMigration(false)">Ne, izbriši</button>
+    </div>
+  </div>
+</div>
+
 <div class="auth-modal" id="bleConfirmModal">
   <div class="panel-back"></div>
   <div class="auth-box" style="gap:16px;text-align:center">
     <p style="font-size:15px;line-height:1.6;margin:0">
       ESP2 ni povezan. Ura bo shranjena brez BLE zagona.<br>
-      <strong>Boste ustavili uro ro&#269;no?</strong>
+      <strong>Boste ustavili uro ročno?</strong>
     </p>
     <label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer">
       <input type="checkbox" id="bleNoShow" style="accent-color:var(--acc);width:16px;height:16px"/>
-      Ne prikazuj ve&#269; tega sporo&#269;ila
+      Ne prikazuj več tega sporočila
     </label>
     <div style="display:flex;gap:10px">
       <button class="auth-submit" style="flex:1" onclick="bleConfirmResolve(true)">Nadaljuj</button>
-      <button class="auth-submit" style="flex:1;background:var(--s1);color:var(--text);border:1px solid var(--border)" onclick="bleConfirmResolve(false)">Prekli&#269;i</button>
+      <button class="auth-submit" style="flex:1;background:var(--s1);color:var(--text);border:1px solid var(--border)" onclick="bleConfirmResolve(false)">Prekliči</button>
     </div>
   </div>
 </div>

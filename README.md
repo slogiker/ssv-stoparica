@@ -1,85 +1,77 @@
-# SSV Stoparica
+# ⏱️ SSV Stoparica — PWA Stopwatch
 
-PWA stopwatch for Slovenian firefighter **SSV** (spajanje sesalnega voda) competitions.
-
-A phone running this app replaces the traditional ESP1 display/speaker setup. A wireless stop button (ESP2) sends a BLE signal when the team finishes.
+A professional Progressive Web App (PWA) stopwatch designed for Slovenian firefighter **SSV** (*spajanje sesalnega voda*) competitions. This application replaces traditional hardware displays and speakers with a mobile-first, high-precision timing system.
 
 ---
 
-## Quick Start (Docker)
+## ✨ Key Features
 
-**Requirements:** Docker + Docker Compose, a `.env` file.
-
-```bash
-cp .env.example .env
-# Edit .env — set a strong JWT_SECRET
-nano .env
-
-docker compose up -d
-```
-
-App is now available at **http://localhost:8742**
+- **🎯 High Precision:** Precision timing with centisecond resolution using `requestAnimationFrame`.
+- **🔋 BLE Integration:** Seamlessly connects to wireless **ESP2** stop buttons via Web Bluetooth.
+- **🔊 Official Audio:** Integrated GZS (*Gasilska zveza Slovenije*) start signals for both Summer and Winter disciplines.
+- **📈 Rich Analytics:** Dynamic, responsive graphs and detailed statistics for tracking team performance.
+- **📱 PWA Ready:** Installable on Android and iOS. Works offline and stays awake during competition.
+- **💻 Desktop Optimized:** Full-width adaptive layout for large screens and tablets.
+- **👥 Multi-User:** Personal accounts to save results, PRs, and paired BLE devices.
 
 ---
 
-## Development
+## 🚀 Quick Start (Docker)
 
-```bash
-cd backend && npm install
-cd .. && ./scripts/dev-start.sh
-```
+The fastest way to get up and running is using Docker Compose.
 
-Runs backend on `:4827`, dev proxy on `:8080`, and opens Chrome with a fresh profile (no cache).
+1. **Prepare Environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env and set a unique JWT_SECRET
+   ```
 
-Default test account: `test / test`
+2. **Launch:**
+   ```bash
+   docker compose up -d --build
+   ```
 
----
-
-## Project Structure
-
-```
-ssv-stoparica/
-├── frontend/           # Vanilla JS PWA (no framework)
-│   ├── index.html      # Main stopwatch app
-│   ├── history.html    # Run history with filters + stats
-│   ├── stats.html      # Stats page (mobile)
-│   ├── app.js          # Main app logic (BLE, timer, auth)
-│   ├── history.js      # History + filter + chart logic
-│   └── style.css       # All styles
-├── backend/            # Node.js + Express API
-│   ├── index.js        # Entry point
-│   ├── db.js           # SQLite setup + schema migrations
-│   ├── middleware.js    # JWT auth middleware
-│   ├── routes/
-│   │   ├── auth.js     # Register, login, profile, password, delete
-│   │   ├── runs.js     # CRUD for timing results
-│   │   └── devices.js  # BLE device registry
-│   └── seed.js         # Dev DB seeder
-├── esp2/               # Arduino firmware for stop button
-├── scripts/            # Dev tooling
-│   ├── dev-start.sh    # One-command dev startup
-│   └── dev-proxy.py    # Dev proxy (static + API forwarding)
-├── tools/              # Utilities
-│   └── gen_qr.py       # QR code generator for device UUIDs
-├── nginx.conf          # Nginx config (frontend static + API proxy)
-├── docker-compose.yml
-└── .env.example
-```
+3. **Access:**
+   The application is now available at **[http://localhost:8081](http://localhost:8081)**.
 
 ---
 
-## Environment Variables
+## 🧪 Testing & Accounts
 
-| Variable | Description |
-|----------|-------------|
-| `JWT_SECRET` | Long random string for signing JWTs — **change this** |
-| `PORT` | Backend port (default: `4827`, internal only) |
-| `DB_PATH` | SQLite database path (default: `/app/data/stoparica.db`) |
+To help you explore the application immediately, the database is automatically seeded with two pre-created accounts:
+
+### 👤 Demo User
+Perfect for checking out the stats and history without having to record runs manually.
+- **Login:** `test@ssv.test`
+- **Password:** `test1234`
+- **Data:** Pre-loaded with 50+ realistic timing results across different dates and disciplines.
+
+### 🔑 Admin User
+Authorized to access the hidden provisioning panel for generating new hardware boxes.
+- **Login:** `admin@ssv.test`
+- **Password:** `admin-password`
+- **Admin Access:** Go to *Settings (⚙️)* → *Admin* (only visible when logged in as admin).
 
 ---
 
-## Production (Nginx Proxy Manager)
+## 🛠️ Project Structure
 
-The app listens on port **8742** (HTTP). Point your Nginx Proxy Manager entry to `localhost:8742` and let NPM handle SSL termination.
+- `frontend/`: Vanilla JavaScript PWA (Zero frameworks for maximum performance).
+- `backend/`: Node.js + Express API with SQLite persistence.
+- `esp2/`: Arduino firmware for the wireless BLE stop button.
+- `tools/`: Utility scripts for device provisioning and QR code generation.
+- `scripts/`: Development automation tools.
 
-> See [DOCS.md](DOCS.md) for full technical documentation.
+---
+
+## ⚙️ Hardware Improvements
+
+For competition reliability, it is recommended to add a **100nF capacitor** across the ESP2 stop button pins (GPIO 0 and GND). This provides robust hardware debouncing, making the stop signal bulletproof in high-interference environments.
+
+---
+
+## 👨‍💻 Author
+
+Developed with ❤️ by **[slogiker](https://github.com/slogiker)**.
+
+*This project is built for the firefighter community to modernize training and competition workflows.*

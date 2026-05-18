@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#080808"/>
+<title>SSV Stoparica — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+<style>
+  .admin-box { background:var(--s1); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+  .qr-preview { background:#fff; padding:10px; border-radius:8px; display:inline-block; margin-top:10px; }
+  .code-block { background:var(--s2); padding:10px; border-radius:8px; font-family:var(--font-mono); font-size:12px; color:var(--acc); overflow-x:auto; margin-top:10px; white-space:pre; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="logo">
+      <span class="logo-ssv">SSV</span>
+      <span class="logo-slash">//</span>
+      <span class="logo-name">Admin</span>
+    </div>
+    <button class="ico-btn" onclick="location.href='index.html'">&#11013;</button>
+  </div>
+
+  <div class="panel-content" style="max-width:600px;margin:0 auto;width:100%">
+    
+    <div class="admin-box">
+      <h3 style="margin-bottom:12px;color:var(--acc)">Nova naprava (Provisioning)</h3>
+      <div class="acc-form">
+        <input class="auth-input" id="devLetter" type="text" placeholder="Črka (npr. A)" maxlength="1"/>
+        <button class="auth-submit" onclick="generateDevice()">Generiraj UUID-je in QR</button>
+      </div>
+      
+      <div id="genResult" style="display:none;margin-top:20px">
+        <div class="setting-desc">Service UUID</div>
+        <div class="code-block" id="resSvc"></div>
+        <div class="setting-desc" style="margin-top:10px">Char UUID</div>
+        <div class="code-block" id="resChar"></div>
+        
+        <div style="text-align:center;margin-top:20px">
+          <div class="qr-preview"><canvas id="qrCanvas"></canvas></div>
+          <div class="setting-desc" id="resUrl" style="word-break:break-all;margin-top:8px"></div>
+        </div>
+
+        <button class="auth-submit" style="margin-top:20px;background:var(--blue)" onclick="flashDevice()">Flash via Web Serial (Chrome/Edge)</button>
+        <div class="setting-desc" style="text-align:center;margin-top:8px">Web Serial zahteva USB povezavo z ESP32</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="admin.js"></script>
+</body>
+</html>

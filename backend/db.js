@@ -35,7 +35,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS devices (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id       INTEGER REFERENCES users(id),
-    uuid          TEXT NOT NULL,
+    svc_uuid      TEXT NOT NULL,
+    char_uuid     TEXT NOT NULL,
     friendly_name TEXT,
     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
   );

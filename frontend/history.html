@@ -22,7 +22,7 @@
       <span class="logo-name">Zgodovina</span>
     </div>
     <div class="topbar-actions">
-      <button class="ico-btn" id="hvDeleteBtn" onclick="deleteSelected()" title="Izbri&#353;i izbrano" style="color:var(--danger);display:none">&#128465;</button>
+      <button class="ico-btn" id="hvDeleteBtn" onclick="deleteSelected()" title="Izbriši izbrano" style="color:var(--danger);display:none">&#128465;</button>
       <button class="ico-btn" onclick="exportCSV()" title="Izvozi CSV">&#8681;</button>
       <button class="ico-btn" onclick="history.back()" title="Nazaj">&#11013;</button>
     </div>
@@ -49,9 +49,10 @@
       </div>
       <div class="hv-filter-section">
         <div class="hv-filter-title">Ekipa</div>
-        <div class="hv-radio-option active" data-team="all"      onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>
-        <div class="hv-radio-option"        data-team="Člani-A"  onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Člani-A</span></div>
-        <div class="hv-radio-option"        data-team="Člani-B"  onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Člani-B</span></div>
+        <div class="hv-team-filters-container">
+          <!-- Populated dynamically by buildTeamFilters() -->
+          <div class="hv-radio-option active" data-team="all" onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>
+        </div>
       </div>
       <div class="hv-filter-section">
         <div class="hv-filter-title">Razvrsti</div>
@@ -71,11 +72,11 @@
     <div class="hv-col hv-stats" id="hvStats">
       <div class="hv-kpi-row">
         <div class="hv-kpi"><div class="hv-kpi-label">Osebni rekord</div><div class="hv-kpi-val" id="hvPR">&#8212;</div></div>
-        <div class="hv-kpi"><div class="hv-kpi-label">Povpre&#269;je</div><div class="hv-kpi-val neutral" id="hvAvg">&#8212;</div></div>
-        <div class="hv-kpi"><div class="hv-kpi-label">Ozna&#269;enih</div><div class="hv-kpi-val neutral" id="hvCount">0</div></div>
+        <div class="hv-kpi"><div class="hv-kpi-label">Povprečje</div><div class="hv-kpi-val neutral" id="hvAvg">&#8212;</div></div>
+        <div class="hv-kpi"><div class="hv-kpi-label">Označenih</div><div class="hv-kpi-val neutral" id="hvCount">0</div></div>
       </div>
       <div class="hv-chart-wrap">
-        <svg id="hvChart" preserveAspectRatio="none"></svg>
+        <svg id="hvChart"></svg>
       </div>
     </div>
 
@@ -115,14 +116,15 @@
       </div>
       <div class="hv-filter-section">
         <div class="hv-filter-title">Ekipa</div>
-        <div class="hv-radio-option active" data-team="all"      onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>
-        <div class="hv-radio-option"        data-team="Člani-A"  onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Člani-A</span></div>
-        <div class="hv-radio-option"        data-team="Člani-B"  onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Člani-B</span></div>
+        <div class="hv-team-filters-container">
+          <!-- Populated dynamically by buildTeamFilters() -->
+          <div class="hv-radio-option active" data-team="all" onclick="setHvTeam(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Vse</span></div>
+        </div>
       </div>
       <div class="hv-filter-section">
         <div class="hv-filter-title">Razvrsti</div>
         <div class="hv-radio-option active" data-sort="index" onclick="setHvSort(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Najnovejši</span></div>
-        <div class="hv-radio-option"        data-sort="best"  onclick="setHvSort(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Najboljši &#269;as</span></div>
+        <div class="hv-radio-option"        data-sort="best"  onclick="setHvSort(this)"><div class="hv-radio-dot"></div><span class="hv-radio-label">Najboljši čas</span></div>
       </div>
     </div>
   </div>
