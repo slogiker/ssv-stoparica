@@ -1,21 +1,30 @@
-MIT License
+SSV Stoparica — Proprietary Source-Available License
+Copyright (c) 2026 Daniel Pliberšek. All rights reserved.
 
-Copyright (c) 2026 Daniel Pliberšek
+────────────────────────────────────────────────────────────
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+PERMITTED (no permission required)
+  - Viewing and reading the source code
+  - Running the software locally for personal, non-commercial testing
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+REQUIRES WRITTEN PERMISSION + FEE
+  - Self-hosting for use in competitions or any organized event:
+    requires purchase of an official SSV-STOP hardware kit AND
+    payment of a self-hosting license fee to the author.
+  - Reselling hardware devices compatible with this software:
+    requires a written reseller agreement with the author and
+    payment of agreed royalties per unit sold.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+NOT PERMITTED under any circumstances
+  - Deploying this software as a service for others without permission
+  - Modifying and distributing this software
+  - Removing or altering this license notice
+  - Using this software or any part of it in another product
+
+────────────────────────────────────────────────────────────
+
+To request a self-hosting or reseller license:
+  plibersek.daniel@gmail.com
+
+This license does not grant any patent rights, trademarks,
+or other intellectual property rights beyond those stated above.
