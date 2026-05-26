@@ -46,12 +46,6 @@ Perfect for checking out the stats and history without having to record runs man
 - **Password:** `test1234`
 - **Data:** Pre-loaded with 50+ realistic timing results across different dates and disciplines.
 
-### 🔑 Admin User
-Authorized to access the hidden provisioning panel for generating new hardware boxes.
-- **Login:** `admin@ssv.test`
-- **Password:** `admin-password`
-- **Admin Access:** Go to *Settings (⚙️)* → *Admin* (only visible when logged in as admin).
-
 ---
 
 ## 🛠️ Project Structure
