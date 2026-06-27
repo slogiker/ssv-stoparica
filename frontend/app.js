@@ -5,10 +5,21 @@ let discipline = 'letna';
 let ekipa = localStorage.getItem('ssv_ekipa') || 'Člani-A';
 let bleDevice = null, bleChar = null, bleServer = null, reconnectTimer = null;
 let _reconnectDelay = 2000;
+let _reconnectCountdownInterval = null;
 let _bleConfirmResolve = null;
 let soundPlaying = false;
 let pripravaOn = localStorage.getItem('ssv_priprava') === '1';
 let _pripravaRaf = null, _pripravaEnd = null;
+
+// ── SIGNAL STRENGTH / DISTANCE ──
+// TX Power at 1 m — must match #define TX_POWER_AT_1M in ESP firmware (-59 dBm)
+const BLE_TX_POWER_AT_1M = -59;
+// Path-loss exponent n. 2.0 = ideal free space; 2.5–3.0 better for indoor use.
+const BLE_PATH_LOSS_N = 2.5;
+// Exponential Moving Average alpha: 0.15 = heavy smoothing, 0.4 = more responsive
+const RSSI_EMA_ALPHA = 0.2;
+let _rssiEma = null;           // smoothed RSSI value (null = no data yet)
+let _rssiWatchAbort = null;    // AbortController for watchAdvertisements()
 
 // Auth state
 let authToken = localStorage.getItem('ssv_token') || null;
@@ -393,13 +404,36 @@ function setDot(state, label) {
 
 async function bleConnect() {
   if (!navigator.bluetooth) { showToast('Web Bluetooth ni podprt v tem brskalniku'); return; }
+  if (bleChar) return; // already connected
   const { svc, chr } = getDeviceUUIDs();
+  _reconnectDelay = 2000; // reset backoff on every manual tap
+  if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   setDot('scanning', 'Išče SSV-STOP...');
+
+  // Try to silently reconnect to a previously permitted device — skips the browser picker
+  if (typeof navigator.bluetooth.getDevices === 'function') {
+    try {
+      const known = await navigator.bluetooth.getDevices();
+      const prev = known.find(d => d.name?.startsWith('SSV-STOP'));
+      if (prev) {
+        bleDevice = prev;
+        bleDevice.removeEventListener('gattserverdisconnected', onDisconn);
+        bleDevice.addEventListener('gattserverdisconnected', onDisconn);
+        await bleGattConnect(svc, chr);
+        showToast('BLE vzpostavljena ✓');
+        document.getElementById('bleDeviceDesc').textContent = bleDevice.name || 'SSV-STOP';
+        return;
+      }
+    } catch (_) { /* device known but unreachable — fall through to picker */ }
+  }
+
+  // First time or previously known device out of range — show browser picker
   try {
     bleDevice = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: 'SSV-STOP' }],
       optionalServices: [svc]
     });
+    bleDevice.removeEventListener('gattserverdisconnected', onDisconn);
     bleDevice.addEventListener('gattserverdisconnected', onDisconn);
     await bleGattConnect(svc, chr);
     showToast('BLE vzpostavljena ✓');
@@ -416,8 +450,12 @@ async function bleGattConnect(svc, chr) {
   bleChar = await service.getCharacteristic(chr);
   await bleChar.startNotifications();
   bleChar.addEventListener('characteristicvaluechanged', onBleVal);
+  // Clear any active reconnect countdown — we're connected
+  if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   setDot('connected', bleDevice.name || 'SSV-STOP');
-  // TODO Phase 1: subscribe to battery level characteristic (0x180F) once ADC is wired on ESP
+  // Start live RSSI monitoring via watchAdvertisements (Chrome 79+)
+  startRssiWatch();
+  // TODO Phase 2: subscribe to battery level characteristic (0x180F) once ADC is wired on ESP
 }
 
 function onBleVal(e) {
@@ -427,14 +465,39 @@ function onBleVal(e) {
 function onDisconn() {
   bleChar = null;
   bleServer = null;
+  clearSignalUI();
+  // Stop RSSI watch — device is gone
+  if (_rssiWatchAbort) { try { _rssiWatchAbort.abort(); } catch (_) {} _rssiWatchAbort = null; }
+  _rssiEma = null;
   setDot('lost', 'Prekinjena — znova se povezujem...');
   clearTimeout(reconnectTimer);
   scheduleReconnect();
 }
 
+function startReconnectCountdown(ms) {
+  if (_reconnectCountdownInterval) clearInterval(_reconnectCountdownInterval);
+  const end = Date.now() + ms;
+  _reconnectCountdownInterval = setInterval(() => {
+    if (!bleDevice || bleChar) {
+      clearInterval(_reconnectCountdownInterval);
+      _reconnectCountdownInterval = null;
+      return;
+    }
+    const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    if (remaining > 0) {
+      setDot('lost', 'Prekinjena — znova v ' + remaining + 's');
+    } else {
+      clearInterval(_reconnectCountdownInterval);
+      _reconnectCountdownInterval = null;
+    }
+  }, 500);
+}
+
 function scheduleReconnect() {
+  startReconnectCountdown(_reconnectDelay);
   reconnectTimer = setTimeout(async () => {
     if (!bleDevice || bleChar) return; // forgotten or already reconnected
+    setDot('scanning', 'Znova se povezujem...');
     const { svc, chr } = getDeviceUUIDs();
     try {
       await bleGattConnect(svc, chr);
@@ -448,7 +511,11 @@ function scheduleReconnect() {
 
 function forgetDevice() {
   clearTimeout(reconnectTimer);
+  if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   _reconnectDelay = 2000;
+  if (_rssiWatchAbort) { try { _rssiWatchAbort.abort(); } catch (_) {} _rssiWatchAbort = null; }
+  _rssiEma = null;
+  clearSignalUI();
   if (bleDevice) bleDevice.removeEventListener('gattserverdisconnected', onDisconn);
   bleDevice = null; bleChar = null; bleServer = null;
   sessionStorage.removeItem('ssv_svc');
@@ -456,6 +523,99 @@ function forgetDevice() {
   setDot('', 'Tapni za povezavo z ESP2');
   document.getElementById('bleDeviceDesc').textContent = 'Ni shranjene naprave';
   showToast('Naprava pozabljena');
+}
+
+// ── SIGNAL STRENGTH & DISTANCE ──
+
+/**
+ * Converts smoothed RSSI to a bar count (1–4) and distance estimate.
+ * Uses the log-distance path-loss model:
+ *   distance = 10 ^ ((TxPowerAt1m - rssi) / (10 * n))
+ *
+ * Bar thresholds (distance-based for intuitive UX):
+ *   4 bars  — < 2 m   (excellent)
+ *   3 bars  — 2–5 m   (good)
+ *   2 bars  — 5–8 m   (fair)
+ *   1 bar   — > 8 m   (weak)
+ */
+function rssiToSignal(rssi) {
+  const distance = Math.pow(10, (BLE_TX_POWER_AT_1M - rssi) / (10 * BLE_PATH_LOSS_N));
+  let bars;
+  if      (distance < 2) bars = 4;
+  else if (distance < 5) bars = 3;
+  else if (distance < 8) bars = 2;
+  else                   bars = 1;
+  return { bars, distance };
+}
+
+/** Update the signal bars SVG, distance text, and dBm label. */
+function updateSignalUI(rssi) {
+  const svgEl  = document.getElementById('signalBars');
+  const distEl = document.getElementById('signalDist');
+  const dbmEl  = document.getElementById('signalDbm');
+  if (!svgEl || !distEl || !dbmEl) return;
+
+  const { bars, distance } = rssiToSignal(rssi);
+
+  svgEl.setAttribute('data-bars', bars);
+
+  // Distance display — format to one decimal, cap at 99.9 m
+  const distCapped = Math.min(distance, 99.9);
+  const distStr = distCapped < 10
+    ? '~' + distCapped.toFixed(1) + 'm'
+    : '~' + Math.round(distCapped) + 'm';
+  distEl.textContent = distStr;
+  distEl.className = 'signal-dist ' + (bars >= 4 ? 'near' : bars >= 3 ? 'near' : bars >= 2 ? 'mid' : 'far');
+
+  // Raw dBm shown in small text
+  dbmEl.textContent = rssi + 'dBm';
+}
+
+/** Reset signal widget to idle state (on disconnect/forget). */
+function clearSignalUI() {
+  const svgEl  = document.getElementById('signalBars');
+  const distEl = document.getElementById('signalDist');
+  const dbmEl  = document.getElementById('signalDbm');
+  if (svgEl)  svgEl.setAttribute('data-bars', '0');
+  if (distEl) { distEl.textContent = '—'; distEl.className = 'signal-dist'; }
+  if (dbmEl)  dbmEl.textContent = '';
+}
+
+/**
+ * Start watching BLE advertisements from the connected device.
+ * Chrome's watchAdvertisements() delivers advertisement events (including RSSI)
+ * even while a GATT connection is active — without disconnecting.
+ *
+ * Falls back gracefully if watchAdvertisements is not supported.
+ */
+async function startRssiWatch() {
+  if (!bleDevice || typeof bleDevice.watchAdvertisements !== 'function') {
+    // API not supported — show bars at max (we know it's connected)
+    const svgEl = document.getElementById('signalBars');
+    if (svgEl) svgEl.setAttribute('data-bars', '4');
+    const distEl = document.getElementById('signalDist');
+    if (distEl) { distEl.textContent = 'OK'; distEl.className = 'signal-dist near'; }
+    return;
+  }
+  // Abort any previous watcher
+  if (_rssiWatchAbort) { try { _rssiWatchAbort.abort(); } catch (_) {} }
+  _rssiWatchAbort = new AbortController();
+  _rssiEma = null;
+  try {
+    await bleDevice.watchAdvertisements({ signal: _rssiWatchAbort.signal });
+    bleDevice.addEventListener('advertisementreceived', (evt) => {
+      const rssi = evt.rssi;
+      if (typeof rssi !== 'number') return;
+      // Exponential Moving Average to smooth RSSI jitter
+      _rssiEma = _rssiEma === null ? rssi : _rssiEma + RSSI_EMA_ALPHA * (rssi - _rssiEma);
+      updateSignalUI(Math.round(_rssiEma));
+    });
+  } catch (e) {
+    // watchAdvertisements may throw if already watching or if permission denied
+    // Non-fatal: bars show connected state without distance
+    const svgEl = document.getElementById('signalBars');
+    if (svgEl) svgEl.setAttribute('data-bars', '4');
+  }
 }
 
 // ── SETTINGS TOGGLES ──
@@ -776,15 +936,23 @@ async function syncRunsFromServer() {
         time: fmtFull(Math.round(r.cas_s * 1000))
       };
     });
-    sessionStorage.setItem('ssv_h', JSON.stringify(history));
+    localStorage.setItem('ssv_h', JSON.stringify(history));
     const prRun = history.reduce((best, r) => (!best || r.ms < best.ms) ? r : best, null);
     if (prRun) {
       pr = prRun.ms;
       document.getElementById('prTime').textContent = fmtFull(pr);
       document.getElementById('prStrip').style.opacity = '1';
     }
+    // Restore last run strip (first entry is the most recent)
+    if (history.length > 0) {
+      document.getElementById('lastTime').textContent = history[0].time;
+      document.getElementById('lastStrip').style.opacity = '1';
+    }
   } catch (e) {
-    showToast('Napaka pri sinhronizaciji rezultatov.');
+    // Only show toast for genuine server errors, not transient network blips
+    if (navigator.onLine !== false) {
+      showToast('Napaka pri sinhronizaciji rezultatov.');
+    }
   }
 }
 
@@ -935,6 +1103,17 @@ if (pripravaOn) {
   document.getElementById('pripravaDesc').textContent = 'Odštevalnik ' + durata + ' (' + discipline + ')';
 }
 setDisplay(0, '');
+// Restore last run and PR strips from local cache on init (instant, before async sync)
+if (history.length > 0) {
+  const prRun = history.reduce((best, r) => (!best || r.ms < best.ms) ? r : best, null);
+  if (prRun) {
+    pr = prRun.ms;
+    document.getElementById('prTime').textContent = fmtFull(pr);
+    document.getElementById('prStrip').style.opacity = '1';
+  }
+  document.getElementById('lastTime').textContent = history[0].time;
+  document.getElementById('lastStrip').style.opacity = '1';
+}
 // Restore ekipa — highlight preset button if it matches, otherwise show in custom input
 const ekipaIsPreset = [...document.querySelectorAll('.ekipa-opt')].some(b => b.dataset.e === ekipa);
 document.querySelectorAll('.ekipa-opt').forEach(b => b.classList.toggle('active', b.dataset.e === ekipa));

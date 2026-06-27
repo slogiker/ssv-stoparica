@@ -18,9 +18,9 @@
 
 // SERVICE_UUID is unique per device — replaced by gen_esp.py
 // CHARACTERISTIC_UUID is unique per device — both UUIDs are replaced by gen_esp.py at provisioning time
-#define SERVICE_UUID        "00000000-0000-0000-0000-000000000000"
-#define CHARACTERISTIC_UUID "12345678-1234-1234-1234-123456789abc"
-#define DEVICE_NAME         "SSV-STOP-X"
+#define SERVICE_UUID        "6f765748-7973-4337-8491-e0fcc08220a9"
+#define CHARACTERISTIC_UUID "9ff0ddb8-dfdb-49e0-a858-1fdb5998f4fa"
+#define DEVICE_NAME         "SSV-STOP-A"
 
 #define BTN_PIN     0    // stop button — press pulls LOW (INPUT_PULLUP)
 #define LED_PIN     2    // onboard LED — HIGH = on

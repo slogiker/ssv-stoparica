@@ -1,13 +1,16 @@
 (function () {
   // --- Banner ---
   const bannerStyle = document.createElement('style');
-  bannerStyle.textContent = '#serverBanner{position:fixed;top:0;left:0;right:0;z-index:9999;background:#ff4040;color:#fff;text-align:center;font-size:13px;padding:8px;display:none;font-family:monospace;letter-spacing:0.05em;}';
+  bannerStyle.textContent = '#serverBanner{display:none;width:100%;background:#e03030;color:#fff;text-align:center;font-size:13px;padding:8px 16px;font-family:monospace;letter-spacing:0.05em;flex-shrink:0;}';
   document.head.appendChild(bannerStyle);
 
   const banner = document.createElement('div');
   banner.id = 'serverBanner';
   banner.textContent = '⚠ Strežnik nedosegljiv';
   document.addEventListener('DOMContentLoaded', () => document.body.prepend(banner));
+
+  function showBanner()  { banner.style.display = 'block'; }
+  function hideBanner()  { banner.style.display = 'none';  }
 
   // --- Global error handlers ---
   window.onerror = function (msg, src, line, col, err) {
@@ -54,7 +57,7 @@
 
     // Retry once on server errors (gateway/upstream restart race)
     if ([502, 503, 504].includes(res.status)) {
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 4000)); // 4s gives backend more time to restart
       try {
         res = await doRequest();
       } catch (e) {
@@ -91,30 +94,43 @@
 
   // --- Watchdog ---
   let missedChecks = 0;
-  window.startWatchdog = function () {
-    setInterval(async () => {
-      // Skip check when tab is hidden — throttled timers give false misses
-      if (document.hidden) return;
-      try {
-        const r = await _fetch('/api/health');
-        if (r.ok) {
-          missedChecks = 0;
-          banner.style.display = 'none';
-        } else {
-          missedChecks++;
-        }
-      } catch {
-        missedChecks++;
+  let _tabWasHidden = false; // true if tab went hidden between two watchdog ticks
+
+  async function _healthCheck(fromInterval) {
+    if (document.hidden) { _tabWasHidden = true; return; } // skip while hidden
+    try {
+      const r = await _fetch('/api/health');
+      if (r.ok) {
+        missedChecks = 0;
+        _tabWasHidden = false;
+        hideBanner();
+      } else {
+        // Don't count misses that follow a hidden period — timers bunch up
+        if (!_tabWasHidden) missedChecks++;
+        _tabWasHidden = false;
       }
-      // Require 3 consecutive visible-tab misses before showing the banner
-      if (missedChecks >= 3) banner.style.display = 'block';
-    }, 60000);
-    // Also check immediately when tab becomes visible again after being hidden
+    } catch {
+      if (!_tabWasHidden) missedChecks++;
+      _tabWasHidden = false;
+    }
+    if (missedChecks >= 3) showBanner();
+  }
+
+  window.startWatchdog = function () {
+    // Immediate check on startup — no need to wait 60s to discover server is down
+    _healthCheck(false);
+    setInterval(() => _healthCheck(true), 60000);
+
+    // When tab becomes visible: reset hidden flag and recheck immediately.
+    // If server is up, any accumulated misses from background throttling are cleared.
     document.addEventListener('visibilitychange', async () => {
-      if (document.hidden) return;
+      if (document.hidden) { _tabWasHidden = true; return; }
+      _tabWasHidden = false;
       try {
         const r = await _fetch('/api/health');
-        if (r.ok) { missedChecks = 0; banner.style.display = 'none'; }
+        if (r.ok) { missedChecks = 0; hideBanner(); }
+        // On failure here: don't increment — we just came back from hidden,
+        // could be momentary network reattach. Let the regular interval handle it.
       } catch {}
     });
   };

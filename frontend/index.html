@@ -45,9 +45,20 @@
     <div class="ble-pill" onclick="bleConnect()">
       <div class="ble-dot" id="bleDot"></div>
       <span class="ble-label" id="bleLabel">Tapni za povezavo z ESP2</span>
+      <span style="font-size:9px;color:var(--muted);font-family:var(--font-mono);margin-left:4px;flex-shrink:0">BT</span>
     </div>
     <div class="stat-pills">
-      <div class="stat-pill">&#128246; <span class="val" id="rssiVal">&#8212;</span></div>
+      <!-- Signal strength widget: bars + distance + dBm -->
+      <div class="stat-pill signal-pill" id="signalPill" title="Moč signala BLE">
+        <svg class="signal-bars" id="signalBars" viewBox="0 0 20 14" width="20" height="14" aria-label="Moč signala">
+          <rect class="bar bar1" x="0"  y="10" width="3.5" height="4"  rx="1"/>
+          <rect class="bar bar2" x="5"  y="7"  width="3.5" height="7"  rx="1"/>
+          <rect class="bar bar3" x="10" y="4"  width="3.5" height="10" rx="1"/>
+          <rect class="bar bar4" x="15" y="1"  width="3.5" height="13" rx="1"/>
+        </svg>
+        <span class="signal-dist" id="signalDist">—</span>
+        <span class="signal-dbm"  id="signalDbm"></span>
+      </div>
       <div class="stat-pill">&#128267; <span class="val" id="batVal">&#8212;</span></div>
     </div>
   </div>

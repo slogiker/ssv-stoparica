@@ -84,7 +84,8 @@ body {
 .app {
   display:flex;
   flex-direction:column;
-  height:100dvh;
+  flex:1;        /* fills remaining body height after the server banner */
+  min-height:0;  /* allows flex children to shrink below content size */
   width:100%;
 }
 
@@ -148,6 +149,46 @@ body {
   background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:6px 10px;
 }
 .stat-pill .val { color:var(--text);font-weight:500; }
+
+/* ── SIGNAL WIDGET ── */
+.signal-pill { gap:7px;flex:1.4; }
+.signal-bars .bar { fill:var(--border);transition:fill .35s ease; }
+
+/* 0 bars — all grey (disconnected) */
+.signal-bars[data-bars="0"] .bar { fill:var(--border); }
+
+/* 1 bar — danger (very weak, >8m) */
+.signal-bars[data-bars="1"] .bar1 { fill:var(--danger); }
+
+/* 2 bars — warning yellow (weak, 5–8m) */
+.signal-bars[data-bars="2"] .bar1,
+.signal-bars[data-bars="2"] .bar2 { fill:#f0b429; }
+
+/* 3 bars — amber/ok (medium, 2–5m) */
+.signal-bars[data-bars="3"] .bar1,
+.signal-bars[data-bars="3"] .bar2,
+.signal-bars[data-bars="3"] .bar3 { fill:#e6a817; }
+
+/* 4 bars — accent green (strong, <2m) */
+.signal-bars[data-bars="4"] .bar1,
+.signal-bars[data-bars="4"] .bar2,
+.signal-bars[data-bars="4"] .bar3,
+.signal-bars[data-bars="4"] .bar4 { fill:var(--acc); }
+
+.signal-dist {
+  font-family:var(--font-mono);font-size:clamp(11px,2vw,13px);
+  color:var(--text);font-weight:600;letter-spacing:.04em;
+  transition:color .35s ease;
+}
+.signal-dist.far  { color:var(--danger); }
+.signal-dist.mid  { color:#f0b429; }
+.signal-dist.near { color:var(--acc); }
+
+.signal-dbm {
+  font-family:var(--font-mono);font-size:9px;color:var(--muted);
+  letter-spacing:.02em;white-space:nowrap;
+}
+
 
 /* ── TIMER AREA ── */
 .timer-area {
@@ -685,7 +726,8 @@ body {
   .app {
     width: 100%;
     max-width: 100%;
-    min-height: 100dvh;
+    flex: 1;          /* banner pushes .app down on desktop too */
+    min-height: 0;
     display: flex;
     flex-direction: column;
     container-type: inline-size;
