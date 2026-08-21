@@ -1,9 +1,10 @@
-const CACHE = 'ssv-v3';
+const CACHE = 'ssv-v5';
 // sounds.js is ~451KB (base64 audio) but is required for offline start-signal audio.
 // error-guard.js must be cached so the global error handler loads when offline.
 const STATIC = [
   '/', '/index.html', '/app.js', '/style.css',
   '/history.html', '/history.js', '/stats.html',
+  '/admin.html', '/admin.js',
   '/manifest.json', '/error-guard.js', '/sounds.js'
 ];
 

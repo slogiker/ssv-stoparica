@@ -2,37 +2,30 @@
 const bcrypt = require('bcrypt');
 
 async function seedDemo(db) {
-  const adminEmail = 'admin@ssv.test';
-  const testEmail = 'test@ssv.test';
-  const adminPass = 'admin-password';
-  const testPass = 'test1234';
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@ssv.test';
+  const testEmail  = process.env.TEST_EMAIL  || 'test@ssv.test';
+  const adminPass  = process.env.ADMIN_PASSWORD || 'admin-password';
+  const testPass   = process.env.TEST_PASSWORD  || 'test1234';
 
-  // Update or Insert Admin
-  const adminHash = await bcrypt.hash(adminPass, 12);
+  // Only insert Admin if they don't exist
   const admin = db.prepare("SELECT id FROM users WHERE email = ?").get(adminEmail);
-  if (admin) {
-    db.prepare("UPDATE users SET geslo_hash = ?, ime = 'admin' WHERE id = ?").run(adminHash, admin.id);
-    console.log('[seed-demo] Admin user updated.');
-  } else {
-    db.prepare("INSERT INTO users (ime, email, geslo_hash) VALUES ('admin', ?, ?)").run(adminEmail, adminHash);
+  if (!admin) {
+    const adminHash = await bcrypt.hash(adminPass, 12);
+    db.prepare("INSERT INTO users (ime, email, geslo_hash, role) VALUES ('admin', ?, ?, 'admin')").run(adminEmail, adminHash);
     console.log('[seed-demo] Created admin user.');
+  } else {
+    // Ensure admin role is set
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(admin.id);
   }
 
-  // Update or Insert Test
-  const testHash = await bcrypt.hash(testPass, 12);
+  // Only insert Test if they don't exist
   const test = db.prepare("SELECT id FROM users WHERE email = ?").get(testEmail);
-  if (test) {
-    db.prepare("UPDATE users SET geslo_hash = ?, ime = 'test' WHERE id = ?").run(testHash, test.id);
-    console.log('[seed-demo] Test user updated.');
-  } else {
+  if (!test) {
+    const testHash = await bcrypt.hash(testPass, 12);
     const { lastInsertRowid: userId } = db.prepare(
       "INSERT INTO users (ime, email, geslo_hash) VALUES ('test', ?, ?)"
     ).run(testEmail, testHash);
-    
-    // Insert initial data only for brand new test user
-    const insertRun = db.prepare('INSERT INTO runs (user_id, ekipa, disciplina, cas_s, datum) VALUES (?, ?, ?, ?, ?)');
-    // ... (simplified data generation for brevity in this re-run if needed, but I'll keep it)
-    console.log('[seed-demo] Created test user and data.');
+    console.log('[seed-demo] Created test user.');
   }
 }
 

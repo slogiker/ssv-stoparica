@@ -42,7 +42,7 @@
 
   <!-- STATUS BAR -->
   <div class="statusbar">
-    <div class="ble-pill" onclick="bleConnect()">
+    <div class="ble-pill" onclick="handleBlePillClick()">
       <div class="ble-dot" id="bleDot"></div>
       <span class="ble-label" id="bleLabel">Tapni za povezavo z ESP2</span>
       <span style="font-size:9px;color:var(--muted);font-family:var(--font-mono);margin-left:4px;flex-shrink:0">BT</span>
@@ -78,6 +78,10 @@
     <div class="last-strip" id="prStrip" style="opacity:.5">
       <span class="last-label">Osebni rekord</span>
       <span class="last-time" id="prTime">&#8212;</span>
+    </div>
+    <div class="last-strip" id="todayStrip" style="opacity:.5">
+      <span class="last-label">Najboljši danes</span>
+      <span class="last-time" id="todayTime">&#8212;</span>
     </div>
     <div class="last-strip" id="lastStrip" style="opacity:.5">
       <span class="last-label">Zadnji čas</span>
@@ -122,6 +126,14 @@
           <div class="setting-desc">GZS start signal</div>
         </div>
         <div class="tog on" id="soundTog" onclick="toggleSound()"></div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Glasovno branje (TTS)</div>
+          <div class="setting-desc">Prebere končni čas v slovenščini</div>
+        </div>
+        <div class="tog" id="ttsTog" onclick="toggleTts()"></div>
       </div>
 
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px">
@@ -398,6 +410,34 @@
       style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:4px">
       Razumem, nadaljuj brez BLE
     </button>
+  </div>
+</div>
+
+<!-- ── BLE DIAGNOSTIC MODAL ── -->
+<div class="auth-modal" id="bleDiagModal">
+  <div class="panel-back" onclick="closeBleDiag()"></div>
+  <div class="auth-box" style="gap:16px; text-align:left; max-width:360px;">
+    <button class="auth-close" onclick="closeBleDiag()">&#10005;</button>
+    <h3 style="color:var(--acc); font-size:16px; border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:4px; font-family:var(--font-sans);">BLE Diagnostika</h3>
+    
+    <div style="display:flex; flex-direction:column; gap:10px; font-size:13px; color:var(--text);">
+      <div>Status: <span id="diagStatus" style="font-weight:700;">Nalagam...</span></div>
+      <div>Naprava: <span id="diagName" style="font-family:var(--font-mono); color:var(--acc);">—</span></div>
+      <div>Moč signala (RSSI): <span id="diagRssi" style="font-family:var(--font-mono);">—</span></div>
+      <div>Razdalja (ocena): <span id="diagDist">—</span></div>
+      <div style="border-top:1px solid var(--border); padding-top:8px; margin-top:4px;">
+        <span style="font-weight:500;">Test Latence (Ping):</span>
+        <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
+          <button class="auth-submit" onclick="runPingTest()" style="margin:0; padding:6px 12px; font-size:11px; flex:none; width:auto; height:32px; background:var(--s2); border:1px solid var(--border); color:var(--text); border-radius:6px; cursor:pointer;">Izmeri ping</button>
+          <span id="pingResult" style="font-family:var(--font-mono); color:var(--acc); font-weight:700;">—</span>
+        </div>
+        <div style="font-size:10px; color:var(--muted); margin-top:4px; line-height:1.3;">
+          Izmeri čas poti od telefona do gumba in nazaj. Manj kot 50ms je odlično za tekmovanja.
+        </div>
+      </div>
+    </div>
+    
+    <button class="auth-submit" onclick="forgetDevice(); closeBleDiag();" style="background:var(--danger); color:#fff; margin-top:8px; height:36px; border-radius:6px; font-size:12px; cursor:pointer;">Pozabi napravo</button>
   </div>
 </div>
 

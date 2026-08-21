@@ -1,5 +1,35 @@
 # SSV Stoparica — Implementation Notes
 
+## Session 4 — Security, Admin Panel, PWA Caching, Voice Countdown & ESP32 Optimizations (2026-08-21)
+
+### Security & Authentication
+- **Database Roles**: Added `role` column (`TEXT DEFAULT 'user'`) to the `users` table via idempotent migration in [`db.js`](file:///home/slogiker/Projects/ssv-stoparica/backend/db.js).
+- **JWT Roles**: Encoded the user's role in the JWT token payload and replaced hardcoded string username matches on both the backend and client-side with JWT payload decoding.
+- **Demo Seeding**: Refactored [`seed-demo.js`](file:///home/slogiker/Projects/ssv-stoparica/backend/seed-demo.js) to insert `admin` and `test` accounts only if they do not exist, reading passwords from environment variables with safe defaults.
+
+### Admin Panel & Moderation
+- **Moderation APIs**: Built administrative endpoints for role management, user deletion (cascade transaction), and retrieving/deleting user runs in [`admin.js`](file:///home/slogiker/Projects/ssv-stoparica/backend/routes/admin.js).
+- **Admin UI**: Styled and built a moderation interface in [admin.html](file:///home/slogiker/Projects/ssv-stoparica/frontend/admin.html) and [admin.js](file:///home/slogiker/Projects/ssv-stoparica/frontend/admin.js) to promote/demote users, inspect run history tables, and delete users or individual runs.
+
+### PWA & UX Quality
+- **Offline Admin Panel**: Cached `/admin.html` and `/admin.js` in [`sw.js`](file:///home/slogiker/Projects/ssv-stoparica/frontend/sw.js) and bumped cache version to `ssv-v5` to support offline provisioning.
+- **Wake Lock Re-acquisition**: Added a visibility change listener to automatically request and re-acquire screen wake lock when returning to the app from background while the stopwatch is running.
+- **Watchdog Hardening**: Updated [`error-guard.js`](file:///home/slogiker/Projects/ssv-stoparica/frontend/error-guard.js) watchdog to prevent false `"Strežnik nedosegljiv"` alarms. Added offline state detection (`navigator.onLine === false`) and a 3-second quiet retry mechanism to ignore wake-up network reattachment latency.
+- **Today's Best (Session PR)**: Added a "Najboljši danes" stat strip in the main interface that dynamically calculates and displays the best time recorded during the current calendar day.
+- **Swipe-to-Delete**: Replaced select/delete checkboxes in [history.html](file:///home/slogiker/Projects/ssv-stoparica/frontend/history.html) with touch swipe gestures on run items to reveal an inline delete button, styled in [style.css](file:///home/slogiker/Projects/ssv-stoparica/frontend/style.css).
+
+### Slovenian Voice Guidance & Countdown
+- **Slovenian Time TTS**: Implemented a custom number-to-words parser in [`app.js`](file:///home/slogiker/Projects/ssv-stoparica/frontend/app.js) to speak finished stopwatch times in native Slovenian (supporting correct plural/dual forms like *sekundi/sekunde/sekund*).
+- **Prep Countdown Audio**: Handled Slovenian speech countdown during the last 10 seconds of the preparation phase (*"Deset, devet... ena"*), immediately followed by the GZS start audio signal to start the stopwatch.
+
+### ESP32 Firmware Perfecting
+- **80MHz Clock Frequency**: Lowered CPU frequency to 80MHz in [`setup()`](file:///home/slogiker/Projects/ssv-stoparica/esp2/esp2_stop/esp2_stop.ino#L156) to reduce battery drain by ~50%.
+- **3-Minute Auto Deep Sleep & Wake**: Changed connection timeout to 3 minutes, entering microamp deep sleep on inactivity. Enabled ext0 wakeup on the button pin, so pressing the button immediately wakes up the ESP32 (no hardware switch required).
+- **1-Second Button Lockout**: Locked input checks for 1 second after a trigger to ignore button contact bounces.
+- **BLE Diagnostics**: Equipped characteristic with read/write flags in firmware to support a real-time connection diagnostic ping test in the app.
+
+---
+
 ## Session 3 — Hardening, Offline Queue, Rate Limiting (2026-04-19)
 
 ### Rate Limiting (backend)

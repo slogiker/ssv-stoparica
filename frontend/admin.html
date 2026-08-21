@@ -13,6 +13,13 @@
   .admin-box { background:var(--s1); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
   .qr-preview { background:#fff; padding:10px; border-radius:8px; display:inline-block; margin-top:10px; }
   .code-block { background:var(--s2); padding:10px; border-radius:8px; font-family:var(--font-mono); font-size:12px; color:var(--acc); overflow-x:auto; margin-top:10px; white-space:pre; }
+  .users-list { margin-top:12px; }
+  .user-item { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
+  .user-item:last-child { border-bottom:none; }
+  .user-info { display:flex; flex-direction:column; gap:2px; }
+  .user-name { font-weight:500; color:var(--text); }
+  .user-email { font-size:12px; color:var(--muted); }
+  .user-meta { font-size:12px; color:var(--muted); text-align:right; line-height:1.4; }
 </style>
 </head>
 <body>
@@ -49,6 +56,13 @@
 
         <button class="auth-submit" style="margin-top:20px;background:var(--blue)" onclick="flashDevice()">Flash via Web Serial (Chrome/Edge)</button>
         <div class="setting-desc" style="text-align:center;margin-top:8px">Web Serial zahteva USB povezavo z ESP32</div>
+      </div>
+    </div>
+
+    <div class="admin-box">
+      <h3 style="margin-bottom:12px;color:var(--acc)">Registrirani uporabniki</h3>
+      <div id="usersList" class="users-list">
+        <div style="color:var(--muted);text-align:center;padding:20px;">Nalagam uporabnike...</div>
       </div>
     </div>
 

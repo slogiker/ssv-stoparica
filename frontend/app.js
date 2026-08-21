@@ -1,6 +1,6 @@
 // ── STATE ──
 let isRunning = false, startTime = null, elapsed = 0, rafId = null;
-let soundOn = true, hapticOn = true, darkOn = localStorage.getItem('ssv_dark') !== '0';
+let soundOn = true, hapticOn = true, darkOn = localStorage.getItem('ssv_dark') !== '0', ttsOn = localStorage.getItem('ssv_tts') === '1';
 let discipline = 'letna';
 let ekipa = localStorage.getItem('ssv_ekipa') || 'Člani-A';
 let bleDevice = null, bleChar = null, bleServer = null, reconnectTimer = null;
@@ -9,7 +9,7 @@ let _reconnectCountdownInterval = null;
 let _bleConfirmResolve = null;
 let soundPlaying = false;
 let pripravaOn = localStorage.getItem('ssv_priprava') === '1';
-let _pripravaRaf = null, _pripravaEnd = null;
+let _pripravaRaf = null, _pripravaEnd = null, lastSpokenSec = null;
 
 // ── SIGNAL STRENGTH / DISTANCE ──
 // TX Power at 1 m — must match #define TX_POWER_AT_1M in ESP firmware (-59 dBm)
@@ -195,6 +195,7 @@ async function handleStart() {
     playBeep(880, 0.5);
     document.getElementById('timerLabel').textContent = 'PRIPRAVA ORODJA';
     _pripravaEnd = Date.now() + totalMs;
+    lastSpokenSec = null;
     tickPriprava();
   } else {
     startSoundPhase();
@@ -217,7 +218,41 @@ function tickPriprava() {
     setTimeout(startSoundPhase, 700);
     return;
   }
+  if (s <= 10 && s > 0 && s !== lastSpokenSec) {
+    lastSpokenSec = s;
+    speakPrepSeconds(s);
+  }
   _pripravaRaf = requestAnimationFrame(tickPriprava);
+}
+
+function speakPrepSeconds(s) {
+  if (!('speechSynthesis' in window)) return;
+  const numWords = {
+    10: 'deset',
+    9: 'devet',
+    8: 'osem',
+    7: 'sedem',
+    6: 'šest',
+    5: 'pet',
+    4: 'štiri',
+    3: 'tri',
+    2: 'dve',
+    1: 'ena'
+  };
+  const word = numWords[s];
+  if (!word) return;
+
+  const utterance = new SpeechSynthesisUtterance(word);
+  utterance.lang = 'sl-SI';
+  
+  const voices = window.speechSynthesis.getVoices();
+  const slVoice = voices.find(v => v.lang.startsWith('sl'));
+  if (slVoice) {
+    utterance.voice = slVoice;
+  }
+  
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
 }
 
 function startSoundPhase() {
@@ -262,6 +297,9 @@ function handleStop() {
   lockUI(false);
   saveRun();
   releaseWakeLock();
+  if (ttsOn) {
+    speakSlovenianTime(elapsed / 1000);
+  }
 }
 
 function handleReset() {
@@ -319,6 +357,7 @@ function saveRun() {
     prEl.classList.add('pop');
   }
   document.getElementById('lastStrip').style.opacity = '1';
+  updateTodayBestUI();
   showToast((isPR ? '🏆 PR! ' : '') + entry.time + ' — ' + ekipa);
 }
 
@@ -569,6 +608,12 @@ function updateSignalUI(rssi) {
 
   // Raw dBm shown in small text
   dbmEl.textContent = rssi + 'dBm';
+
+  // Live diagnostic modal sync
+  const diagRssi = document.getElementById('diagRssi');
+  const diagDist = document.getElementById('diagDist');
+  if (diagRssi) diagRssi.textContent = rssi + ' dBm';
+  if (diagDist) diagDist.textContent = distStr;
 }
 
 /** Reset signal widget to idle state (on disconnect/forget). */
@@ -579,6 +624,11 @@ function clearSignalUI() {
   if (svgEl)  svgEl.setAttribute('data-bars', '0');
   if (distEl) { distEl.textContent = '—'; distEl.className = 'signal-dist'; }
   if (dbmEl)  dbmEl.textContent = '';
+
+  const diagRssi = document.getElementById('diagRssi');
+  const diagDist = document.getElementById('diagDist');
+  if (diagRssi) diagRssi.textContent = '—';
+  if (diagDist) diagDist.textContent = '—';
 }
 
 /**
@@ -643,6 +693,122 @@ function toggleDark() {
   document.body.classList.toggle('light', !darkOn);
   document.getElementById('darkTog').className = 'tog' + (darkOn ? ' on' : '');
 }
+function toggleTts() {
+  ttsOn = !ttsOn;
+  localStorage.setItem('ssv_tts', ttsOn ? '1' : '0');
+  document.getElementById('ttsTog').className = 'tog' + (ttsOn ? ' on' : '');
+}
+
+function speakSlovenianTime(seconds) {
+  if (!('speechSynthesis' in window)) return;
+  
+  function getNumberWords(num) {
+    if (num === 0) return 'nič';
+    const ones = ['', 'ena', 'dve', 'tri', 'štiri', 'pet', 'šest', 'sedem', 'osem', 'devet'];
+    const teens = ['deset', 'enajst', 'dvanajst', 'trinajst', 'štirinajst', 'petnajst', 'šestnajst', 'sedemnajst', 'osemnajst', 'devetnajst'];
+    const tens = ['', 'deset', 'dvajset', 'trideset', 'štirideset', 'petdeset', 'šestdeset', 'sedemdeset', 'osemdeset', 'devetdeset'];
+
+    if (num < 10) return ones[num];
+    if (num < 20) return teens[num - 10];
+    const ten = Math.floor(num / 10);
+    const one = num % 10;
+    if (one === 0) return tens[ten];
+    
+    let oneWord = (one === 1) ? 'en' : ones[one];
+    if (one === 2) oneWord = 'dve';
+    return oneWord + 'in' + tens[ten];
+  }
+
+  const wholeSeconds = Math.floor(seconds);
+  const hundredths = Math.round((seconds - wholeSeconds) * 100);
+  
+  let text = getNumberWords(wholeSeconds);
+  if (wholeSeconds % 100 === 1) text += ' sekunda';
+  else if (wholeSeconds % 100 === 2) text += ' sekundi';
+  else if (wholeSeconds % 100 === 3 || wholeSeconds % 100 === 4) text += ' sekunde';
+  else text += ' sekund';
+
+  if (hundredths > 0) {
+    text += ' in ' + getNumberWords(hundredths);
+    if (hundredths % 100 === 1) text += ' stotinka';
+    else if (hundredths % 100 === 2) text += ' stotinki';
+    else if (hundredths % 100 === 3 || hundredths % 100 === 4) text += ' stotinke';
+    else text += ' stotink';
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'sl-SI';
+  
+  const voices = window.speechSynthesis.getVoices();
+  const slVoice = voices.find(v => v.lang.startsWith('sl'));
+  if (slVoice) {
+    utterance.voice = slVoice;
+  }
+  
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+}
+
+// ── BLE DIAGNOSTICS ──
+function handleBlePillClick() {
+  if (bleChar) {
+    openBleDiag();
+  } else {
+    bleConnect();
+  }
+}
+
+function openBleDiag() {
+  const modal = document.getElementById('bleDiagModal');
+  if (!modal) return;
+  modal.classList.add('open');
+  
+  document.getElementById('diagStatus').textContent = bleChar ? 'Povezan' : 'Brez povezave';
+  document.getElementById('diagStatus').style.color = bleChar ? 'var(--acc)' : 'var(--danger)';
+  document.getElementById('diagName').textContent = bleDevice ? (bleDevice.name || 'SSV-STOP') : 'Neznano';
+  
+  // Set initial signal strength if available
+  const dbmEl = document.getElementById('signalDbm');
+  const distEl = document.getElementById('signalDist');
+  document.getElementById('diagRssi').textContent = dbmEl ? (dbmEl.textContent || '—') : '—';
+  document.getElementById('diagDist').textContent = distEl ? (distEl.textContent || '—') : '—';
+  document.getElementById('pingResult').textContent = '—';
+  document.getElementById('pingResult').style.color = 'var(--text)';
+}
+
+function closeBleDiag() {
+  const modal = document.getElementById('bleDiagModal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function runPingTest() {
+  const btn = document.querySelector('#bleDiagModal button[onclick="runPingTest()"]');
+  const resEl = document.getElementById('pingResult');
+  if (!bleChar) { showToast('BLE ni povezan.'); return; }
+  
+  btn.disabled = true;
+  resEl.textContent = 'Merim...';
+  
+  try {
+    const t0 = performance.now();
+    await bleChar.readValue();
+    const roundtrip = Math.round(performance.now() - t0);
+    resEl.textContent = `${roundtrip} ms`;
+    if (roundtrip < 30) {
+      resEl.style.color = 'var(--acc)';
+    } else if (roundtrip < 80) {
+      resEl.style.color = 'var(--blue)';
+    } else {
+      resEl.style.color = 'var(--danger)';
+    }
+  } catch (err) {
+    resEl.textContent = 'Napaka';
+    resEl.style.color = 'var(--danger)';
+    showToast('Ping napaka: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
 function setEkipa(el) {
   ekipa = el.dataset.e;
   localStorage.setItem('ssv_ekipa', ekipa);
@@ -694,9 +860,27 @@ function closeSettings() { document.getElementById('settingsPanel').classList.re
 // ── WAKE LOCK ──
 let wakeLock = null;
 async function requestWakeLock() {
-  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { }
+  if (wakeLock) return;
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => {
+        wakeLock = null;
+      });
+    }
+  } catch (e) { }
 }
-function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release();
+    wakeLock = null;
+  }
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && isRunning) {
+    await requestWakeLock();
+  }
+});
 
 // ── LANDSCAPE ──
 function checkOrientation() {
@@ -821,9 +1005,11 @@ function doLogout() {
   // Clear both strips so a new guest session starts clean
   document.getElementById('lastTime').textContent = '\u2014';
   document.getElementById('prTime').textContent = '\u2014';
+  document.getElementById('todayTime').textContent = '\u2014';
   document.getElementById('lastPr').className = 'last-pr';
   document.getElementById('lastStrip').style.opacity = '.5';
   document.getElementById('prStrip').style.opacity = '.5';
+  document.getElementById('todayStrip').style.opacity = '.5';
   updateAuthUI();
   showToast('Odjavljeni ste.');
 }
@@ -896,6 +1082,39 @@ function updateDevicesUI() {
   });
 }
 
+function getRoleFromToken() {
+  if (!authToken) return 'user';
+  try {
+    const base64Url = authToken.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(c => {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload).role || 'user';
+  } catch (e) {
+    return 'user';
+  }
+}
+function getTodayBest() {
+  const todayPrefix = new Date().toLocaleDateString('sl-SI');
+  const todayRuns = history.filter(r => r.datum && r.datum.startsWith(todayPrefix));
+  if (todayRuns.length === 0) return null;
+  return Math.min(...todayRuns.map(r => r.ms));
+}
+
+function updateTodayBestUI() {
+  const best = getTodayBest();
+  const el = document.getElementById('todayTime');
+  const strip = document.getElementById('todayStrip');
+  if (best && el && strip) {
+    el.textContent = fmtFull(best);
+    strip.style.opacity = '1';
+  } else if (el && strip) {
+    el.textContent = '\u2014';
+    strip.style.opacity = '.5';
+  }
+}
+
 function updateAuthUI() {
   const btn = document.getElementById('authBtn');
   const saveBtn = document.getElementById('btnSaveDevice');
@@ -906,7 +1125,7 @@ function updateAuthUI() {
     btn.title = 'Račun (' + currentUser + ')';
     btn.onclick = openAccountModal;
     if (saveBtn) saveBtn.style.display = '';
-    const isAdmin = ['slogiker', 'admin'].includes(currentUser.toLowerCase());
+    const isAdmin = getRoleFromToken() === 'admin';
     if (adminRow) adminRow.style.display = isAdmin ? 'flex' : 'none';
     fetchDevices();
   } else {
@@ -1090,6 +1309,7 @@ if (!navigator.bluetooth && sessionStorage.getItem('ssv_bwarn') !== '1') {
 if (!darkOn) document.body.classList.add('light');
 document.getElementById('darkTog').className = 'tog' + (darkOn ? ' on' : '');
 updateHapticUI();
+document.getElementById('ttsTog').className = 'tog' + (ttsOn ? ' on' : '');
 // setDisc must run before pripravaDesc so the description shows the correct discipline
 setDisc('zimska');
 document.getElementById('pripravaTog').className = 'tog' + (pripravaOn ? ' on' : '');
@@ -1113,6 +1333,7 @@ if (history.length > 0) {
   }
   document.getElementById('lastTime').textContent = history[0].time;
   document.getElementById('lastStrip').style.opacity = '1';
+  updateTodayBestUI();
 }
 // Restore ekipa — highlight preset button if it matches, otherwise show in custom input
 const ekipaIsPreset = [...document.querySelectorAll('.ekipa-opt')].some(b => b.dataset.e === ekipa);

@@ -36,7 +36,7 @@ router.post('/register', async (req, res) => {
   try {
     const geslo_hash = await bcrypt.hash(geslo, SALT_ROUNDS);
     const result = db.prepare('INSERT INTO users (ime, email, geslo_hash) VALUES (?, ?, ?)').run(ime.trim(), email, geslo_hash);
-    const token = jwt.sign({ id: result.lastInsertRowid, ime: ime.trim(), email }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
+    const token = jwt.sign({ id: result.lastInsertRowid, ime: ime.trim(), email, role: 'user' }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
     res.status(201).json({ token, ime: ime.trim() });
   } catch (e) {
     // SQLite UNIQUE constraint fires on concurrent duplicate-email registrations
@@ -72,7 +72,7 @@ router.post('/login', async (req, res) => {
     if (!match) {
       return res.status(401).json({ napaka: 'Napačna prijava ali geslo.' });
     }
-    const token = jwt.sign({ id: user.id, ime: user.ime, email: user.email }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
+    const token = jwt.sign({ id: user.id, ime: user.ime, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
     res.json({ token, ime: user.ime });
   } catch (e) {
     res.status(500).json({ napaka: 'Napaka pri prijavi. Prosimo, poskusite znova.' });
@@ -88,7 +88,7 @@ router.put('/profile', requireAuth, async (req, res) => {
   }
   try {
     db.prepare('UPDATE users SET ime = ? WHERE id = ?').run(ime.trim(), req.user.id);
-    const token = jwt.sign({ id: req.user.id, ime: ime.trim(), email: req.user.email }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
+    const token = jwt.sign({ id: req.user.id, ime: ime.trim(), email: req.user.email, role: req.user.role }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
     res.json({ token, ime: ime.trim() });
   } catch (e) {
     res.status(500).json({ napaka: 'Napaka pri posodabljanju profila.' });
@@ -117,7 +117,7 @@ router.put('/password', requireAuth, async (req, res) => {
 router.post('/refresh', requireAuth, (req, res) => {
   try {
     const token = jwt.sign(
-      { id: req.user.id, ime: req.user.ime, email: req.user.email },
+      { id: req.user.id, ime: req.user.ime, email: req.user.email, role: req.user.role },
       process.env.JWT_SECRET,
       { expiresIn: TOKEN_TTL }
     );

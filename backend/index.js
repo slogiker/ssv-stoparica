@@ -14,6 +14,7 @@ const { requireAuth } = require('./middleware');
 const authRoutes = require('./routes/auth');
 const runsRoutes = require('./routes/runs');
 const devicesRoutes = require('./routes/devices');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 4827;
@@ -30,14 +31,14 @@ app.use(cors(CORS_ORIGIN === '*' ? undefined : { origin: CORS_ORIGIN }));
 // Limit request body to 10 kB — these endpoints have very small payloads.
 app.use(express.json({ limit: '10kb' }));
 
-// Rate-limit auth endpoints: 10 attempts per IP per 15-minute window.
+// Rate-limit auth endpoints: 10 attempts per IP per 5-minute window.
 // Prevents brute-force against login and registration spam.
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { napaka: 'Preveč poskusov. Počakajte 15 minut in poskusite znova.' },
+  message: { napaka: 'Preveč poskusov. Počakajte 5 minut in poskusite znova.' },
 });
 app.use('/api/auth/login',    authLimiter);
 app.use('/api/auth/register', authLimiter);
@@ -47,6 +48,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/runs', requireAuth, runsRoutes);
 app.use('/api/devices', requireAuth, devicesRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Global error handler — always returns JSON (must be last app.use)
 app.use((err, req, res, next) => {

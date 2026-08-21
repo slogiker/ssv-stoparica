@@ -266,15 +266,99 @@ function makeRunItem(r) {
   const el = document.createElement('div');
   el.className = 'hv-run-item' + (hvChecked.has(r.id) ? ' checked' : '');
   el.dataset.id = r.id;
-  el.innerHTML = `
+
+  const content = document.createElement('div');
+  content.className = 'hv-run-content';
+  content.innerHTML = `
     <div class="hv-run-check${hvChecked.has(r.id) ? ' checked' : ''}"></div>
     <span class="hv-run-id">#${r.id}</span>
     <div class="hv-run-body">
       <span class="hv-run-time">${r.time}</span>
       <span class="hv-run-meta">${r.ekipa} \u00b7 ${r.disc === 'zimska' ? 'Zimska' : 'Letna'} \u00b7 ${r.datum}</span>
     </div>`;
-  el.onclick = () => toggleHvRun(r.id);
+
+  let isSwiping = false;
+  content.onclick = (e) => {
+    if (isSwiping) { e.preventDefault(); return; }
+    toggleHvRun(r.id);
+  };
+
+  const delBtn = document.createElement('div');
+  delBtn.className = 'hv-run-delete-btn';
+  delBtn.textContent = 'Izbriši';
+  delBtn.onclick = (e) => {
+    e.stopPropagation();
+    deleteSingleRun(r.id);
+  };
+
+  el.appendChild(content);
+  el.appendChild(delBtn);
+
+  // Touch swipe events
+  let touchStartX = 0;
+  let touchMoveX = 0;
+
+  content.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    content.style.transition = 'none';
+    isSwiping = false;
+  }, { passive: true });
+
+  content.addEventListener('touchmove', e => {
+    touchMoveX = e.touches[0].clientX;
+    const diff = touchMoveX - touchStartX;
+    if (diff < -10) {
+      isSwiping = true;
+    }
+    if (diff < 0) {
+      const translateVal = Math.max(diff, -85);
+      content.style.transform = `translateX(${translateVal}px)`;
+    } else {
+      content.style.transform = `translateX(0px)`;
+    }
+  }, { passive: true });
+
+  content.addEventListener('touchend', e => {
+    content.style.transition = 'transform 0.2s ease';
+    const diff = touchMoveX - touchStartX;
+    if (diff < -40) {
+      content.style.transform = 'translateX(-80px)';
+    } else {
+      content.style.transform = 'translateX(0px)';
+      setTimeout(() => { isSwiping = false; }, 50);
+    }
+    touchStartX = 0;
+    touchMoveX = 0;
+  });
+
   return el;
+}
+
+async function deleteSingleRun(id) {
+  if (!confirm('Ali res želiš izbrisati ta rezultat?')) return;
+  if (authToken) {
+    try {
+      const r = await fetch(API + '/runs/' + id, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + authToken }
+      });
+      if (r.status === 204) {
+        showToast('Rezultat izbrisan.');
+      } else {
+        showToast('Napaka pri brisanju.');
+      }
+    } catch {
+      showToast('Napaka pri brisanju.');
+    }
+  } else {
+    const stored = JSON.parse(localStorage.getItem('ssv_h') || '[]');
+    localStorage.setItem('ssv_h', JSON.stringify(stored.filter(x => x.id !== id)));
+    showToast('Rezultat izbrisan.');
+  }
+
+  runs = runs.filter(x => x.id !== id);
+  hvChecked.delete(id);
+  buildHistoryView();
 }
 
 // ── INTERACTIONS ──

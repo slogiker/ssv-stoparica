@@ -98,22 +98,39 @@
 
   async function _healthCheck(fromInterval) {
     if (document.hidden) { _tabWasHidden = true; return; } // skip while hidden
-    try {
-      const r = await _fetch('/api/health');
-      if (r.ok) {
+    if (navigator.onLine === false) { _tabWasHidden = true; return; } // skip if browser is offline
+    
+    const tryCheck = async () => {
+      try {
+        const r = await _fetch('/api/health');
+        return r.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    const ok = await tryCheck();
+    if (ok) {
+      missedChecks = 0;
+      _tabWasHidden = false;
+      hideBanner();
+      return;
+    }
+
+    // If first check failed, wait 3 seconds and try one more time quietly (filters out network reattach drops)
+    setTimeout(async () => {
+      if (document.hidden || navigator.onLine === false) return;
+      const retryOk = await tryCheck();
+      if (retryOk) {
         missedChecks = 0;
         _tabWasHidden = false;
         hideBanner();
       } else {
-        // Don't count misses that follow a hidden period — timers bunch up
         if (!_tabWasHidden) missedChecks++;
         _tabWasHidden = false;
+        if (missedChecks >= 3) showBanner();
       }
-    } catch {
-      if (!_tabWasHidden) missedChecks++;
-      _tabWasHidden = false;
-    }
-    if (missedChecks >= 3) showBanner();
+    }, 3000);
   }
 
   window.startWatchdog = function () {
@@ -132,6 +149,11 @@
         // On failure here: don't increment — we just came back from hidden,
         // could be momentary network reattach. Let the regular interval handle it.
       } catch {}
+    });
+
+    // Check immediately when coming back online
+    window.addEventListener('online', () => {
+      _healthCheck(false);
     });
   };
 

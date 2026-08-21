@@ -20,6 +20,7 @@ db.exec(`
     ime         TEXT NOT NULL,
     email       TEXT UNIQUE NOT NULL,
     geslo_hash  TEXT NOT NULL,
+    role        TEXT DEFAULT 'user',
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -46,5 +47,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_runs_user_cas      ON runs    (user_id, cas_s);
   CREATE INDEX IF NOT EXISTS idx_devices_user       ON devices (user_id);
 `);
+
+try {
+  db.prepare("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'").run();
+} catch (e) {
+  // Ignore if column already exists
+}
 
 module.exports = db;

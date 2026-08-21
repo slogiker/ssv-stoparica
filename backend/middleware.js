@@ -19,4 +19,14 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { requireAuth };
+function requireAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ napaka: 'Dostop zavrnjen. Niste administrator.' });
+    }
+    next();
+  });
+}
+
+module.exports = { requireAuth, requireAdmin };
