@@ -111,6 +111,21 @@ function setDisplay(ms, state) {
   document.getElementById('timerGlow').className = 'timer-glow' + (state === 'running' ? ' running' : '');
 }
 
+function setStopButtonState(disabled) {
+  document.getElementById('stopBtn').disabled = disabled;
+  const lsStop = document.getElementById('lsStopBtn');
+  if (lsStop) {
+    lsStop.style.display = disabled ? 'none' : '';
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
+}
+
 function tick() { elapsed = Date.now() - startTime; setDisplay(elapsed, 'running'); rafId = requestAnimationFrame(tick); }
 
 // ── CONTROLS ──
@@ -153,7 +168,7 @@ function cancelAudio() {
   setDisplay(0, '');
   document.getElementById('timerLabel').textContent = 'ČAKANJE NA START';
   document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled = true;
+  setStopButtonState(true);
   document.getElementById('resetBtn').disabled = true;
   lockUI(false);
 }
@@ -188,7 +203,7 @@ async function handleStart() {
   soundPlaying = true;
   vibrate(80);
   document.getElementById('startBtn').disabled = true;
-  document.getElementById('stopBtn').disabled = false; // allow cancel at any point
+  setStopButtonState(false); // allow cancel at any point
 
   if (pripravaOn) {
     const totalMs = (discipline === 'letna' ? 180 : 60) * 1000;
@@ -279,7 +294,7 @@ function startTimerActual() {
   soundPlaying = false;
   isRunning = true; startTime = Date.now() - elapsed; rafId = requestAnimationFrame(tick);
   document.getElementById('timerLabel').textContent = 'MERJENJE...';
-  document.getElementById('stopBtn').disabled = false;
+  setStopButtonState(false);
   document.getElementById('resetBtn').disabled = true;
   requestWakeLock();
 }
@@ -292,14 +307,15 @@ function handleStop() {
   vibrate([60, 40, 100]);
   document.getElementById('timerLabel').textContent = 'USTAVLJENO';
   document.getElementById('startBtn').disabled = true;
-  document.getElementById('stopBtn').disabled = true;
+  setStopButtonState(true);
   document.getElementById('resetBtn').disabled = false;
   lockUI(false);
   saveRun();
   releaseWakeLock();
-  if (ttsOn) {
-    speakSlovenianTime(elapsed / 1000);
-  }
+  // Disabled time announcement by request:
+  // if (ttsOn) {
+  //   speakSlovenianTime(elapsed / 1000);
+  // }
 }
 
 function handleReset() {
@@ -308,7 +324,7 @@ function handleReset() {
   setDisplay(0, '');
   document.getElementById('timerLabel').textContent = 'ČAKANJE NA START';
   document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled = true;
+  setStopButtonState(true);
   document.getElementById('resetBtn').disabled = true;
   lockUI(false);
 }
@@ -723,17 +739,9 @@ function speakSlovenianTime(seconds) {
   const hundredths = Math.round((seconds - wholeSeconds) * 100);
   
   let text = getNumberWords(wholeSeconds);
-  if (wholeSeconds % 100 === 1) text += ' sekunda';
-  else if (wholeSeconds % 100 === 2) text += ' sekundi';
-  else if (wholeSeconds % 100 === 3 || wholeSeconds % 100 === 4) text += ' sekunde';
-  else text += ' sekund';
 
   if (hundredths > 0) {
     text += ' in ' + getNumberWords(hundredths);
-    if (hundredths % 100 === 1) text += ' stotinka';
-    else if (hundredths % 100 === 2) text += ' stotinki';
-    else if (hundredths % 100 === 3 || hundredths % 100 === 4) text += ' stotinke';
-    else text += ' stotink';
   }
 
   const utterance = new SpeechSynthesisUtterance(text);
@@ -1053,7 +1061,7 @@ function updateSidebarHistory() {
     el.innerHTML = `
       <div class="hv-run-body">
         <span class="hv-run-time">${r.time}</span>
-        <span class="hv-run-meta">${r.ekipa} · ${r.disc === 'zimska' ? 'Zimska' : 'Letna'} · ${r.datum.split(',')[0]}</span>
+        <span class="hv-run-meta">${escapeHtml(r.ekipa)} · ${r.disc === 'zimska' ? 'Zimska' : 'Letna'} · ${r.datum.split(',')[0]}</span>
       </div>`;
     container.appendChild(el);
   });
@@ -1073,7 +1081,7 @@ function updateDevicesUI() {
     el.style.padding = '10px 20px';
     el.innerHTML = `
       <div class="setting-info">
-        <div class="setting-name" style="font-size:13px">${dev.friendly_name || 'Neznana naprava'}</div>
+        <div class="setting-name" style="font-size:13px">${escapeHtml(dev.friendly_name || 'Neznana naprava')}</div>
         <div class="setting-desc">${dev.svc_uuid.slice(0, 8)}...</div>
       </div>
       <button class="ico-btn" onclick="removeDevice(${dev.id})" style="color:var(--danger);border-color:var(--border)">&#128465;</button>
@@ -1168,8 +1176,13 @@ async function syncRunsFromServer() {
       document.getElementById('lastStrip').style.opacity = '1';
     }
   } catch (e) {
-    // Only show toast for genuine server errors, not transient network blips
-    if (navigator.onLine !== false) {
+    console.error('Runs sync failed:', e);
+    // Only show toast for genuine server errors, not transient network/fetch blips (like DevTools hard reloads)
+    const isNetworkError = e instanceof TypeError || 
+                           e.message === 'Failed to fetch' || 
+                           e.message.includes('NetworkError') || 
+                           e.message.includes('Load failed');
+    if (navigator.onLine !== false && !isNetworkError) {
       showToast('Napaka pri sinhronizaciji rezultatov.');
     }
   }

@@ -3,6 +3,13 @@
 const API = '/api';
 const authToken = localStorage.getItem('ssv_token') || null;
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
+}
+
 // Apply dark/light mode
 const darkOn = localStorage.getItem('ssv_dark') !== '0';
 if (!darkOn) document.body.classList.add('light');
@@ -99,7 +106,7 @@ function buildTeamFilters() {
       el.className = 'hv-radio-option' + (activeVal === team ? ' active' : '');
       el.dataset.team = team;
       el.onclick = () => setHvTeam(el);
-      el.innerHTML = `<div class="hv-radio-dot"></div><span class="hv-radio-label">${team}</span>`;
+      el.innerHTML = `<div class="hv-radio-dot"></div><span class="hv-radio-label">${escapeHtml(team)}</span>`;
       container.appendChild(el);
     });
   });
@@ -274,7 +281,7 @@ function makeRunItem(r) {
     <span class="hv-run-id">#${r.id}</span>
     <div class="hv-run-body">
       <span class="hv-run-time">${r.time}</span>
-      <span class="hv-run-meta">${r.ekipa} \u00b7 ${r.disc === 'zimska' ? 'Zimska' : 'Letna'} \u00b7 ${r.datum}</span>
+      <span class="hv-run-meta">${escapeHtml(r.ekipa)} \u00b7 ${r.disc === 'zimska' ? 'Zimska' : 'Letna'} \u00b7 ${r.datum}</span>
     </div>`;
 
   let isSwiping = false;
@@ -351,12 +358,11 @@ async function deleteSingleRun(id) {
       showToast('Napaka pri brisanju.');
     }
   } else {
-    const stored = JSON.parse(localStorage.getItem('ssv_h') || '[]');
-    localStorage.setItem('ssv_h', JSON.stringify(stored.filter(x => x.id !== id)));
     showToast('Rezultat izbrisan.');
   }
 
   runs = runs.filter(x => x.id !== id);
+  localStorage.setItem('ssv_h', JSON.stringify(runs));
   hvChecked.delete(id);
   buildHistoryView();
 }

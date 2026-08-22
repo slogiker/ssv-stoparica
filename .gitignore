@@ -38,3 +38,7 @@ current-state.png
 # Claude internals
 .claude/
 venv/
+
+# Voice testing tool (local only)
+/frontend/voice-tester.html
+

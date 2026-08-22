@@ -32,7 +32,7 @@ The fastest way to get up and running is using Docker Compose.
    ```
 
 3. **Access:**
-   The application is now available at **[http://localhost:8081](http://localhost:8081)**.
+   The application is now available at **[http://localhost:8742](http://localhost:8742)**.
 
 ---
 

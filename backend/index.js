@@ -10,7 +10,7 @@ if (!process.env.JWT_SECRET) {
 }
 
 const rateLimit = require('express-rate-limit');
-const { requireAuth } = require('./middleware');
+const { requireAuth, requireAdmin } = require('./middleware');
 const authRoutes = require('./routes/auth');
 const runsRoutes = require('./routes/runs');
 const devicesRoutes = require('./routes/devices');
@@ -48,7 +48,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/runs', requireAuth, runsRoutes);
 app.use('/api/devices', requireAuth, devicesRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', requireAdmin, adminRoutes);
 
 // Global error handler — always returns JSON (must be last app.use)
 app.use((err, req, res, next) => {
