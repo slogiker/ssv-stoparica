@@ -2,17 +2,16 @@ SSV Stoparica — Device Info
 ============================================================
 
 Device name      : SSV-STOP-A
-Custom label     : Hamercani
-Service UUID     : 6f765748-7973-4337-8491-e0fcc08220a9
-Characteristic   : 9ff0ddb8-dfdb-49e0-a858-1fdb5998f4fa
+Service UUID     : 959e9299-896e-4d05-a747-3fe70fd2122c
+Characteristic   : 9c2c6e30-04f3-4ef0-8577-b4d9ca5f68c3
 
-QR URL           : https://ssv.slogiker.si/?device=6f765748-7973-4337-8491-e0fcc08220a9&char=9ff0ddb8-dfdb-49e0-a858-1fdb5998f4fa
+QR URL           : https://ssv.slogiker.si/?device=959e9299-896e-4d05-a747-3fe70fd2122c&char=9c2c6e30-04f3-4ef0-8577-b4d9ca5f68c3
 
 ────────────────────────────────────────────────────────────
 Files in this folder
-  SSV-STOP-A.ino          — flash to ESP32 (Arduino IDE / esptool)
-  qr_SSV-STOP-A.png       — print & stick on the stop box
-  INFO_SSV-STOP-A.txt     — this file
+  SSV-STOP-A.ino        — flash to ESP32 (Arduino IDE / esptool)
+  qr_SSV-STOP-A.png     — print & stick on the stop box
+  INFO_SSV-STOP-A.txt   — this file
 
 ────────────────────────────────────────────────────────────
 How it works
@@ -36,5 +35,5 @@ Troubleshooting
   - BLE not working? Make sure you use Chrome on Android
   - Wrong device connecting? Check the ?device= UUID matches
   - Lost this file? UUIDs are also in SSV-STOP-A.ino (#define lines)
-  - Need a new QR? Re-run gen_esp.py --letter A
-    (same folder, same UUIDs, fresh QR image)
+  - Need a new QR? Re-run:  python3 tools/gen_esp.py --name A
+    (same name → same folder will be overwritten with fresh QR)

@@ -168,8 +168,8 @@ void setup() {
 
   // Set TX power to 0 dBm — consistent, documented reference point for distance math.
   // ESP32 supports: -12, -9, -6, -3, 0, 3, 6, 9 dBm via ESP_PWR_LVL_* constants.
-  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P0);   // 0 dBm advertising
-  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P0); // 0 dBm GATT
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_N0);   // 0 dBm advertising
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_N0); // 0 dBm GATT
 
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new ServerCallbacks());
@@ -198,8 +198,7 @@ void setup() {
   scanResp.setName(DEVICE_NAME);
   // TX Power Level AD structure: length=2, type=0x0A, value=TX_POWER_AT_1M
   uint8_t txAdv[3] = { 0x02, 0x0A, (uint8_t)(int8_t)TX_POWER_AT_1M };
-  std::string txStr((char*)txAdv, 3);
-  scanResp.addData(txStr);
+  scanResp.addData((char*)txAdv, 3);
   pAdvertising->setScanResponseData(scanResp);
 
   pAdvertising->start();

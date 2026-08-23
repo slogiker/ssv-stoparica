@@ -271,6 +271,7 @@ function speakPrepSeconds(s) {
 }
 
 function startSoundPhase() {
+  console.log('STOPWATCH: Starting preparation phase (sound=' + soundOn + ', discipline=' + discipline + ')...');
   document.getElementById('timerLabel').textContent = 'PRIPRAVA...';
   if (soundOn) {
     if (_audioEl) { _audioEl.pause(); _audioEl.currentTime = 0; }
@@ -293,6 +294,7 @@ function startTimerActual() {
   _audioEl = null;
   soundPlaying = false;
   isRunning = true; startTime = Date.now() - elapsed; rafId = requestAnimationFrame(tick);
+  console.log('STOPWATCH: Timing started. Reference start time (ms):', startTime);
   document.getElementById('timerLabel').textContent = 'MERJENJE...';
   setStopButtonState(false);
   document.getElementById('resetBtn').disabled = true;
@@ -300,10 +302,15 @@ function startTimerActual() {
 }
 
 function handleStop() {
-  if (soundPlaying) { cancelAudio(); return; }
+  if (soundPlaying) {
+    console.log('STOPWATCH: Stop request during audio preparation. Cancelling audio.');
+    cancelAudio();
+    return;
+  }
   if (!isRunning) return;
   cancelAnimationFrame(rafId); isRunning = false;
   elapsed = Date.now() - startTime; setDisplay(elapsed, 'stopped');
+  console.log('STOPWATCH: Timing stopped. Final elapsed:', elapsed, 'ms (' + fmtFull(elapsed) + ')');
   vibrate([60, 40, 100]);
   document.getElementById('timerLabel').textContent = 'USTAVLJENO';
   document.getElementById('startBtn').disabled = true;
@@ -319,6 +326,7 @@ function handleStop() {
 }
 
 function handleReset() {
+  console.log('STOPWATCH: Reset.');
   cancelAnimationFrame(rafId); isRunning = false; elapsed = 0;
   soundPlaying = false; _audioEl = null; _audioStarted = true; _pripravaRaf = null; _pripravaEnd = null;
   setDisplay(0, '');
@@ -458,19 +466,29 @@ function setDot(state, label) {
 }
 
 async function bleConnect() {
-  if (!navigator.bluetooth) { showToast('Web Bluetooth ni podprt v tem brskalniku'); return; }
-  if (bleChar) return; // already connected
+  if (!navigator.bluetooth) {
+    console.error('BLE: Web Bluetooth API is not supported in this browser context (requires HTTPS or localhost).');
+    showToast('Web Bluetooth ni podprt v tem brskalniku');
+    return;
+  }
+  if (bleChar) {
+    console.log('BLE: Already connected to device:', bleDevice ? bleDevice.name : 'Unknown');
+    return;
+  }
   const { svc, chr } = getDeviceUUIDs();
+  console.log('BLE: Starting connection sequence. Configured UUIDs - Service:', svc, 'Characteristic:', chr);
   _reconnectDelay = 2000; // reset backoff on every manual tap
   if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   setDot('scanning', 'Išče SSV-STOP...');
-
+ 
   // Try to silently reconnect to a previously permitted device — skips the browser picker
   if (typeof navigator.bluetooth.getDevices === 'function') {
     try {
+      console.log('BLE: Checking for previously paired devices...');
       const known = await navigator.bluetooth.getDevices();
       const prev = known.find(d => d.name?.startsWith('SSV-STOP'));
       if (prev) {
+        console.log('BLE: Found matching previously paired device:', prev.name, 'Attempting auto-reconnect...');
         bleDevice = prev;
         bleDevice.removeEventListener('gattserverdisconnected', onDisconn);
         bleDevice.addEventListener('gattserverdisconnected', onDisconn);
@@ -478,33 +496,45 @@ async function bleConnect() {
         showToast('BLE vzpostavljena ✓');
         document.getElementById('bleDeviceDesc').textContent = bleDevice.name || 'SSV-STOP';
         return;
+      } else {
+        console.log('BLE: No matching previously paired device found.');
       }
-    } catch (_) { /* device known but unreachable — fall through to picker */ }
+    } catch (e) {
+      console.warn('BLE: Auto-reconnect check failed (falling back to device picker):', e);
+    }
   }
-
+ 
   // First time or previously known device out of range — show browser picker
   try {
+    console.log('BLE: Requesting device list from browser picker (prefix: SSV-STOP)...');
     bleDevice = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: 'SSV-STOP' }],
       optionalServices: [svc]
     });
+    console.log('BLE: Device selected:', bleDevice.name, 'ID:', bleDevice.id);
     bleDevice.removeEventListener('gattserverdisconnected', onDisconn);
     bleDevice.addEventListener('gattserverdisconnected', onDisconn);
     await bleGattConnect(svc, chr);
     showToast('BLE vzpostavljena ✓');
     document.getElementById('bleDeviceDesc').textContent = bleDevice.name || 'SSV-STOP';
   } catch (e) {
+    console.error('BLE: Connection failed or user canceled the dialog:', e);
     setDot('lost', 'Napaka — tapni za ponovni poskus');
     showToast('BLE: ' + e.message);
   }
 }
-
+ 
 async function bleGattConnect(svc, chr) {
+  console.log('BLE: Connecting to GATT server on device:', bleDevice.name);
   bleServer = await bleDevice.gatt.connect();
+  console.log('BLE: GATT server connected. Retrieving service:', svc);
   const service = await bleServer.getPrimaryService(svc);
+  console.log('BLE: Service retrieved. Retrieving characteristic:', chr);
   bleChar = await service.getCharacteristic(chr);
+  console.log('BLE: Characteristic retrieved. Subscribing to notifications...');
   await bleChar.startNotifications();
   bleChar.addEventListener('characteristicvaluechanged', onBleVal);
+  console.log('BLE: Successfully subscribed to notifications.');
   // Clear any active reconnect countdown — we're connected
   if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   setDot('connected', bleDevice.name || 'SSV-STOP');
@@ -512,12 +542,22 @@ async function bleGattConnect(svc, chr) {
   startRssiWatch();
   // TODO Phase 2: subscribe to battery level characteristic (0x180F) once ADC is wired on ESP
 }
-
+ 
 function onBleVal(e) {
-  if (e.target.value.getUint8(0) === 0x01 && isRunning) handleStop();
+  const rawVal = Array.from(new Uint8Array(e.target.value.buffer));
+  console.log('BLE: Characteristic value changed. Payload:', rawVal);
+  if (e.target.value.getUint8(0) === 0x01) {
+    if (isRunning) {
+      console.log('BLE: Stop signal (0x01) received while running. Stopping stopwatch.');
+      handleStop();
+    } else {
+      console.log('BLE: Stop signal (0x01) received, but stopwatch is not running.');
+    }
+  }
 }
-
+ 
 function onDisconn() {
+  console.warn('BLE: Device disconnected:', bleDevice ? bleDevice.name : 'Unknown');
   bleChar = null;
   bleServer = null;
   clearSignalUI();
@@ -528,7 +568,7 @@ function onDisconn() {
   clearTimeout(reconnectTimer);
   scheduleReconnect();
 }
-
+ 
 function startReconnectCountdown(ms) {
   if (_reconnectCountdownInterval) clearInterval(_reconnectCountdownInterval);
   const end = Date.now() + ms;
@@ -547,24 +587,28 @@ function startReconnectCountdown(ms) {
     }
   }, 500);
 }
-
+ 
 function scheduleReconnect() {
+  console.log('BLE: Reconnect scheduled in ' + _reconnectDelay + 'ms.');
   startReconnectCountdown(_reconnectDelay);
   reconnectTimer = setTimeout(async () => {
     if (!bleDevice || bleChar) return; // forgotten or already reconnected
+    console.log('BLE: Attempting scheduled reconnect...');
     setDot('scanning', 'Znova se povezujem...');
     const { svc, chr } = getDeviceUUIDs();
     try {
       await bleGattConnect(svc, chr);
       _reconnectDelay = 2000; // reset on success
-    } catch {
+    } catch (e) {
+      console.warn('BLE: Scheduled reconnect attempt failed:', e);
       _reconnectDelay = Math.min(_reconnectDelay * 2, 10000);
       scheduleReconnect();
     }
   }, _reconnectDelay);
 }
-
+ 
 function forgetDevice() {
+  console.log('BLE: User request to forget device.');
   clearTimeout(reconnectTimer);
   if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   _reconnectDelay = 2000;
