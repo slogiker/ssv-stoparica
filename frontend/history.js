@@ -715,3 +715,36 @@ function setupResizer(el, body, side) {
 restoreFilterState();
 loadRuns();
 initResizers();
+
+// Silent auto-connect BLE to keep the device awake
+async function bleKeepAlive() {
+  if (!navigator.bluetooth) return;
+  const svc = sessionStorage.getItem('ssv_svc') || '959e9299-896e-4d05-a747-3fe70fd2122c';
+  const chr = sessionStorage.getItem('ssv_chr') || '9c2c6e30-04f3-4ef0-8577-b4d9ca5f68c3';
+  if (typeof navigator.bluetooth.getDevices === 'function') {
+    try {
+      const known = await navigator.bluetooth.getDevices();
+      const prev = known.find(d => d.name?.startsWith('SSV-STOP'));
+      if (prev) {
+        console.log('BLE Keep-Alive: Reconnecting to device:', prev.name);
+        const server = await prev.gatt.connect();
+        const service = await server.getPrimaryService(svc);
+        const char = await service.getCharacteristic(chr);
+        // Start notifications so the connection is active and fully setup
+        await char.startNotifications();
+        char.addEventListener('characteristicvaluechanged', (e) => {
+          if (e.target.value && e.target.value.byteLength > 0) {
+            console.log('BLE Keep-Alive: Received notification byte length:', e.target.value.byteLength);
+          }
+        });
+        prev.addEventListener('gattserverdisconnected', () => {
+          console.warn('BLE Keep-Alive: Device disconnected.');
+        });
+        console.log('BLE Keep-Alive: Connected and active.');
+      }
+    } catch (e) {
+      console.log('BLE Keep-Alive: Silent reconnect failed/ignored:', e.message);
+    }
+  }
+}
+bleKeepAlive();

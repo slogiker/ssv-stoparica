@@ -1,6 +1,11 @@
 (function () {
   // --- Log Capture Buffer ---
-  window.consoleLogs = [];
+  let storedLogs = [];
+  try {
+    const raw = sessionStorage.getItem('ssv_console_logs');
+    if (raw) storedLogs = JSON.parse(raw);
+  } catch (_) {}
+  window.consoleLogs = storedLogs;
   const maxLogs = 1000;
   
   function capture(level, args) {
@@ -16,6 +21,9 @@
     if (window.consoleLogs.length > maxLogs) {
       window.consoleLogs.shift();
     }
+    try {
+      sessionStorage.setItem('ssv_console_logs', JSON.stringify(window.consoleLogs));
+    } catch (_) {}
   }
 
   const originalLog = console.log;

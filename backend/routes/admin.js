@@ -8,36 +8,37 @@ const router = express.Router();
 router.get('/users', requireAdmin, (req, res) => {
   try {
     const users = db.prepare(`
-      SELECT u.id, u.ime, u.email, u.created_at, COUNT(r.id) AS runs_count,
-             (
-               SELECT json_group_array(json_object(
-                 'friendly_name', d.friendly_name,
-                 'svc_uuid', d.svc_uuid,
-                 'char_uuid', d.char_uuid
-               ))
-               FROM devices d
-               WHERE d.user_id = u.id
-             ) AS devices_json
+      SELECT u.id, u.ime, u.email, u.created_at, COUNT(r.id) AS runs_count
       FROM users u
       LEFT JOIN runs r ON u.id = r.user_id
-      GROUP BY u.id
+      GROUP BY u.id, u.ime, u.email, u.created_at
       ORDER BY u.created_at DESC
     `).all();
 
-    const parsedUsers = users.map(u => {
-      const parsed = { ...u };
-      try {
-        parsed.devices = JSON.parse(u.devices_json || '[]');
-      } catch (err) {
-        parsed.devices = [];
-      }
-      delete parsed.devices_json;
-      return parsed;
-    });
+    const devices = db.prepare(`
+      SELECT user_id, friendly_name, svc_uuid, char_uuid
+      FROM devices
+    `).all();
+
+    const devicesByUser = {};
+    for (const d of devices) {
+      if (!devicesByUser[d.user_id]) devicesByUser[d.user_id] = [];
+      devicesByUser[d.user_id].push({
+        friendly_name: d.friendly_name,
+        svc_uuid: d.svc_uuid,
+        char_uuid: d.char_uuid
+      });
+    }
+
+    const parsedUsers = users.map(u => ({
+      ...u,
+      devices: devicesByUser[u.id] || []
+    }));
 
     res.json(parsedUsers);
   } catch (e) {
-    res.status(500).json({ napaka: 'Napaka pri pridobivanju uporabnikov.' });
+    console.error('Error in GET /api/admin/users:', e);
+    res.status(500).json({ napaka: 'Napaka pri pridobivanju uporabnikov: ' + e.message });
   }
 });
 
