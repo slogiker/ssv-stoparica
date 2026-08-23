@@ -574,6 +574,10 @@ async function bleGattConnect(svc, chr) {
 }
  
 function onBleVal(e) {
+  if (!e.target.value || e.target.value.byteLength === 0) {
+    console.log('BLE: Characteristic value changed, but payload is empty (0 bytes).');
+    return;
+  }
   const rawVal = Array.from(new Uint8Array(e.target.value.buffer));
   console.log('BLE: Characteristic value changed. Payload:', rawVal);
   if (e.target.value.getUint8(0) === 0x01) {
