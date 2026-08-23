@@ -193,6 +193,7 @@ function showBleConfirm() {
 }
 
 async function handleStart() {
+  console.log('UI_CONTROL: Start button clicked.');
   if (isRunning || soundPlaying) return;
   if (!bleChar) {
     const proceed = await showBleConfirm();
@@ -203,6 +204,8 @@ async function handleStart() {
   soundPlaying = true;
   vibrate(80);
   document.getElementById('startBtn').disabled = true;
+  const lsStart = document.getElementById('lsStartBtn');
+  if (lsStart) lsStart.disabled = true;
   setStopButtonState(false); // allow cancel at any point
 
   if (pripravaOn) {
@@ -298,10 +301,12 @@ function startTimerActual() {
   document.getElementById('timerLabel').textContent = 'MERJENJE...';
   setStopButtonState(false);
   document.getElementById('resetBtn').disabled = true;
+  const lsReset = document.getElementById('lsResetBtn');
+  if (lsReset) lsReset.disabled = true;
   requestWakeLock();
 }
 
-function handleStop() {
+function handleStop(triggeredBy) {
   if (soundPlaying) {
     console.log('STOPWATCH: Stop request during audio preparation. Cancelling audio.');
     cancelAudio();
@@ -310,12 +315,16 @@ function handleStop() {
   if (!isRunning) return;
   cancelAnimationFrame(rafId); isRunning = false;
   elapsed = Date.now() - startTime; setDisplay(elapsed, 'stopped');
-  console.log('STOPWATCH: Timing stopped. Final elapsed:', elapsed, 'ms (' + fmtFull(elapsed) + ')');
+  console.log('STOPWATCH: Timing stopped by ' + (triggeredBy || 'UI') + '. Final elapsed:', elapsed, 'ms (' + fmtFull(elapsed) + ')');
   vibrate([60, 40, 100]);
   document.getElementById('timerLabel').textContent = 'USTAVLJENO';
   document.getElementById('startBtn').disabled = true;
+  const lsStart = document.getElementById('lsStartBtn');
+  if (lsStart) lsStart.disabled = true;
   setStopButtonState(true);
   document.getElementById('resetBtn').disabled = false;
+  const lsReset = document.getElementById('lsResetBtn');
+  if (lsReset) lsReset.disabled = false;
   lockUI(false);
   saveRun();
   releaseWakeLock();
@@ -326,14 +335,18 @@ function handleStop() {
 }
 
 function handleReset() {
-  console.log('STOPWATCH: Reset.');
+  console.log('UI_CONTROL: Reset button clicked.');
   cancelAnimationFrame(rafId); isRunning = false; elapsed = 0;
   soundPlaying = false; _audioEl = null; _audioStarted = true; _pripravaRaf = null; _pripravaEnd = null;
   setDisplay(0, '');
   document.getElementById('timerLabel').textContent = 'ČAKANJE NA START';
   document.getElementById('startBtn').disabled = false;
+  const lsStart = document.getElementById('lsStartBtn');
+  if (lsStart) lsStart.disabled = false;
   setStopButtonState(true);
   document.getElementById('resetBtn').disabled = true;
+  const lsReset = document.getElementById('lsResetBtn');
+  if (lsReset) lsReset.disabled = true;
   lockUI(false);
 }
 
@@ -549,7 +562,7 @@ function onBleVal(e) {
   if (e.target.value.getUint8(0) === 0x01) {
     if (isRunning) {
       console.log('BLE: Stop signal (0x01) received while running. Stopping stopwatch.');
-      handleStop();
+      handleStop('BLE');
     } else {
       console.log('BLE: Stop signal (0x01) received, but stopwatch is not running.');
     }
@@ -1426,3 +1439,33 @@ if (typeof startWatchdog === 'function') startWatchdog();
 // Service worker registration (Phase 3 — offline/installable PWA)
 // Skip service worker on localhost (dev) — avoids stale cache issues
 if ('serviceWorker' in navigator && location.hostname !== 'localhost') navigator.serviceWorker.register('/sw.js');
+
+// Auto-connect BLE on load if supported and previously paired
+async function bleAutoConnect() {
+  if (!navigator.bluetooth) return;
+  if (bleChar) return;
+  const { svc, chr } = getDeviceUUIDs();
+  if (typeof navigator.bluetooth.getDevices === 'function') {
+    try {
+      console.log('BLE Auto-Connect: Checking for previously paired devices...');
+      const known = await navigator.bluetooth.getDevices();
+      const prev = known.find(d => d.name?.startsWith('SSV-STOP'));
+      if (prev) {
+        console.log('BLE Auto-Connect: Found matching previously paired device:', prev.name, 'Attempting auto-reconnect...');
+        setDot('scanning', 'Povezujem...');
+        bleDevice = prev;
+        bleDevice.removeEventListener('gattserverdisconnected', onDisconn);
+        bleDevice.addEventListener('gattserverdisconnected', onDisconn);
+        await bleGattConnect(svc, chr);
+        showToast('BLE vzpostavljena ✓');
+        document.getElementById('bleDeviceDesc').textContent = bleDevice.name || 'SSV-STOP';
+      } else {
+        console.log('BLE Auto-Connect: No previously paired devices found.');
+      }
+    } catch (e) {
+      console.log('BLE Auto-Connect: Auto-reconnect failed/ignored:', e.message);
+      setDot('', 'Tapni za povezavo z ESP2');
+    }
+  }
+}
+bleAutoConnect();

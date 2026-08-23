@@ -19,7 +19,11 @@
 <!-- ── LANDSCAPE VIEW ── -->
 <div class="landscape-view">
   <div class="landscape-timer" id="lsTimer">00:00<span style="font-size:.45em;opacity:.5">.00</span></div>
-  <button class="landscape-stop" id="lsStopBtn" style="display: none;" onclick="handleStop()" aria-label="Ustavi merjenje">&#9632; STOP</button>
+  <div style="display:flex;gap:16px;justify-content:center;align-items:center;width:100%;max-width:480px">
+    <button class="landscape-start" id="lsStartBtn" onclick="handleStart()" aria-label="Začni merjenje">▶ START</button>
+    <button class="landscape-stop" id="lsStopBtn" style="display: none;" onclick="handleStop()" aria-label="Ustavi merjenje">&#9632; STOP</button>
+    <button class="landscape-reset" id="lsResetBtn" onclick="handleReset()" disabled aria-label="Ponastavi uro">↺ RESET</button>
+  </div>
 </div>
 
 <!-- ── MAIN APP ── -->
