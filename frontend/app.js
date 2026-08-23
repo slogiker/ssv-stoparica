@@ -1361,6 +1361,7 @@ function openInChrome() {
   }
 }
 function dismissBrowserWarn() {
+  console.warn('USER_DECISION: User rejected switching browser and decided to continue without BLE.');
   sessionStorage.setItem('ssv_bwarn', '1');
   document.getElementById('browserWarnModal').classList.remove('open');
 }
@@ -1469,3 +1470,18 @@ async function bleAutoConnect() {
   }
 }
 bleAutoConnect();
+
+function downloadLogs() {
+  console.log('UI_CONTROL: User requested download of diagnostic logs.');
+  const logsText = (window.consoleLogs || []).map(l => `[${l.time}] [${l.level}] ${l.message}`).join('\n');
+  const blob = new Blob([logsText], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ssv_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Dnevniki preneseni. Pošljite jih na report@slogiker.si');
+}

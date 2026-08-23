@@ -1,4 +1,45 @@
 (function () {
+  // --- Log Capture Buffer ---
+  window.consoleLogs = [];
+  const maxLogs = 1000;
+  
+  function capture(level, args) {
+    const time = new Date().toISOString();
+    const message = args.map(arg => {
+      if (arg instanceof Error) return arg.stack || arg.message;
+      if (typeof arg === 'object') {
+        try { return JSON.stringify(arg); } catch { return String(arg); }
+      }
+      return String(arg);
+    }).join(' ');
+    window.consoleLogs.push({ time, level, message });
+    if (window.consoleLogs.length > maxLogs) {
+      window.consoleLogs.shift();
+    }
+  }
+
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  const originalInfo = console.info;
+
+  console.log = function(...args) {
+    capture('LOG', args);
+    originalLog.apply(console, args);
+  };
+  console.info = function(...args) {
+    capture('INFO', args);
+    originalInfo.apply(console, args);
+  };
+  console.warn = function(...args) {
+    capture('WARN', args);
+    originalWarn.apply(console, args);
+  };
+  console.error = function(...args) {
+    capture('ERROR', args);
+    originalError.apply(console, args);
+  };
+
   // --- Banner ---
   const bannerStyle = document.createElement('style');
   bannerStyle.textContent = '#serverBanner{display:none;width:100%;background:#e03030;color:#fff;text-align:center;font-size:13px;padding:8px 16px;font-family:monospace;letter-spacing:0.05em;flex-shrink:0;}';
