@@ -537,6 +537,22 @@ async function bleConnect() {
   }
 }
  
+function logDiagnosticInfo() {
+  console.log('--- DIAGNOSTIC SYSTEM INFO ---');
+  console.log('UserAgent:', navigator.userAgent);
+  console.log('Platform:', navigator.platform);
+  console.log('Bluetooth Supported:', !!navigator.bluetooth);
+  if (bleDevice) {
+    console.log('BLE Device Name:', bleDevice.name);
+    console.log('BLE Device ID:', bleDevice.id);
+    console.log('GATT Connected:', bleDevice.gatt?.connected);
+  }
+  const { svc, chr } = getDeviceUUIDs();
+  console.log('Target Service UUID:', svc);
+  console.log('Target Characteristic UUID:', chr);
+  console.log('------------------------------');
+}
+
 async function bleGattConnect(svc, chr) {
   console.log('BLE: Connecting to GATT server on device:', bleDevice.name);
   bleServer = await bleDevice.gatt.connect();
@@ -548,6 +564,7 @@ async function bleGattConnect(svc, chr) {
   await bleChar.startNotifications();
   bleChar.addEventListener('characteristicvaluechanged', onBleVal);
   console.log('BLE: Successfully subscribed to notifications.');
+  logDiagnosticInfo();
   // Clear any active reconnect countdown — we're connected
   if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   setDot('connected', bleDevice.name || 'SSV-STOP');
@@ -712,12 +729,17 @@ function clearSignalUI() {
  * Falls back gracefully if watchAdvertisements is not supported.
  */
 async function startRssiWatch() {
+  console.log('BLE RSSI: Initializing signal strength UI...');
+  // Set default connected state fallback immediately so the UI doesn't look broken (e.g. if watchAdvertisements is unsupported or doesn't receive events while connected)
+  const svgEl = document.getElementById('signalBars');
+  if (svgEl) svgEl.setAttribute('data-bars', '4');
+  const distEl = document.getElementById('signalDist');
+  if (distEl) { distEl.textContent = 'OK'; distEl.className = 'signal-dist near'; }
+  const dbmEl = document.getElementById('signalDbm');
+  if (dbmEl) dbmEl.textContent = 'Connected';
+
   if (!bleDevice || typeof bleDevice.watchAdvertisements !== 'function') {
-    // API not supported — show bars at max (we know it's connected)
-    const svgEl = document.getElementById('signalBars');
-    if (svgEl) svgEl.setAttribute('data-bars', '4');
-    const distEl = document.getElementById('signalDist');
-    if (distEl) { distEl.textContent = 'OK'; distEl.className = 'signal-dist near'; }
+    console.log('BLE RSSI: watchAdvertisements not supported on this platform/browser.');
     return;
   }
   // Abort any previous watcher
@@ -725,19 +747,19 @@ async function startRssiWatch() {
   _rssiWatchAbort = new AbortController();
   _rssiEma = null;
   try {
+    console.log('BLE RSSI: Starting watchAdvertisements on device...');
     await bleDevice.watchAdvertisements({ signal: _rssiWatchAbort.signal });
     bleDevice.addEventListener('advertisementreceived', (evt) => {
       const rssi = evt.rssi;
+      console.log('BLE RSSI: Advertisement packet received. Raw RSSI:', rssi, 'dBm');
       if (typeof rssi !== 'number') return;
       // Exponential Moving Average to smooth RSSI jitter
       _rssiEma = _rssiEma === null ? rssi : _rssiEma + RSSI_EMA_ALPHA * (rssi - _rssiEma);
       updateSignalUI(Math.round(_rssiEma));
     });
   } catch (e) {
-    // watchAdvertisements may throw if already watching or if permission denied
-    // Non-fatal: bars show connected state without distance
-    const svgEl = document.getElementById('signalBars');
-    if (svgEl) svgEl.setAttribute('data-bars', '4');
+    console.warn('BLE RSSI: watchAdvertisements failed or was aborted:', e.message);
+    // Non-fatal: bars show connected state without distance (kept as fallback set above)
   }
 }
 
