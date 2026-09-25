@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="#080808"/>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080808'/%3E%3Ctext x='16' y='24' font-family='sans-serif' font-size='22' font-weight='bold' fill='%23d4ff00' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E"/>
-<title>SSV Stoparica — Zgodovina</title>
+<title>SSV Stoparica - Zgodovina</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="style.css"/>
@@ -64,7 +64,19 @@
     <div class="hv-resizer" id="hvRes1"></div>
 
     <!-- MIDDLE: Run list -->
-    <div class="hv-col hv-runs tab-active" id="hvRuns"></div>
+    <div class="hv-col hv-runs tab-active" id="hvRunsCol">
+      <div class="hv-runs-toolbar" id="hvToolbar">
+        <div class="hv-tb-left">
+          <button class="hv-tb-btn" id="hvSelectAllBtn" onclick="toggleSelectAll()">Izberi vse</button>
+          <button class="hv-tb-btn" id="hvDeselectAllBtn" onclick="deselectAll()">Odznači vse</button>
+        </div>
+        <div class="hv-tb-right">
+          <span class="hv-tb-count" id="hvTbCount">Označenih: 0</span>
+          <button class="hv-tb-btn danger" id="hvDeleteSelectedBtn" onclick="deleteSelected()" style="display:none">&#128465; Izbriši izbrane</button>
+        </div>
+      </div>
+      <div class="hv-runs-list" id="hvRuns"></div>
+    </div>
 
     <div class="hv-resizer" id="hvRes2"></div>
 
@@ -91,7 +103,7 @@
 
 </div>
 
-<!-- Filter overlay (mobile) — slides from left -->
+<!-- Filter overlay (mobile) - slides from left -->
 <div class="filter-overlay" id="filterOverlay">
   <div class="panel-back" onclick="closeFilterOverlay()"></div>
   <div class="filter-overlay-body">

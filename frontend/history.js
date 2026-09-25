@@ -1,4 +1,4 @@
-// ── HISTORY PAGE — standalone script ──
+// ── HISTORY PAGE - standalone script ──
 
 const API = '/api';
 const authToken = localStorage.getItem('ssv_token') || null;
@@ -45,6 +45,30 @@ function showToast(msg) {
   clearTimeout(_toastTimer); _toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
+function parseDateSafe(val) {
+  if (!val) return new Date();
+  if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
+  if (typeof val === 'number') return new Date(val);
+  const s = String(val).trim();
+  let d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  const sIso = s.replace(' ', 'T');
+  d = new Date(sIso.endsWith('Z') ? sIso : sIso + 'Z');
+  if (!isNaN(d.getTime())) return d;
+  const m = s.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})(?:[,\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (m) {
+    return new Date(
+      parseInt(m[3], 10),
+      parseInt(m[2], 10) - 1,
+      parseInt(m[1], 10),
+      parseInt(m[4] || 0, 10),
+      parseInt(m[5] || 0, 10),
+      parseInt(m[6] || 0, 10)
+    );
+  }
+  return new Date();
+}
+
 // ── LOAD RUNS ──
 async function loadRuns() {
   if (authToken) {
@@ -53,12 +77,12 @@ async function loadRuns() {
       if (!r.ok) throw new Error();
       const data = await r.json();
       runs = data.map(r => {
-        const iso = r.datum.replace(' ', 'T');
+        const d = parseDateSafe(r.datum);
         return {
           id: r.id,
-          datum: new Date(iso + 'Z').toLocaleString('sl-SI'),
-          datumIso: new Date(iso + 'Z').toISOString(),
-          ekipa: r.ekipa || '—',
+          datum: d.toLocaleString('sl-SI'),
+          datumIso: d.toISOString(),
+          ekipa: r.ekipa || '-',
           disc: r.disciplina,
           ms: Math.round((r.cas_s || 0) * 1000),
           time: fmtFull(Math.round((r.cas_s || 0) * 1000))
@@ -77,11 +101,16 @@ async function loadRuns() {
       stored = filtered;
       localStorage.setItem('ssv_h', JSON.stringify(stored));
     }
-    runs = stored.map(r => ({
-      ...r,
-      ms: Math.round((r.ms || 0)),
-      datumIso: r.datumIso || r.datum
-    }));
+    runs = stored.map(r => {
+      const d = parseDateSafe(r.datumIso || r.datum);
+      return {
+        ...r,
+        datum: d.toLocaleString('sl-SI'),
+        datumIso: d.toISOString(),
+        ms: Math.round((r.ms || 0)),
+        time: r.time || fmtFull(Math.round((r.ms || 0)))
+      };
+    });
   }
   buildHistoryView();
   buildTeamFilters();
@@ -92,8 +121,8 @@ function buildTeamFilters() {
   const containers = document.querySelectorAll('.hv-team-filters-container');
   if (!containers.length) return;
 
-  // Get unique teams from runs, excluding '—'
-  const usedTeams = [...new Set(runs.map(r => r.ekipa))].filter(t => t && t !== '—' && t !== 'Vse');
+  // Get unique teams from runs, excluding '-' and 'Vse'
+  const usedTeams = [...new Set(runs.map(r => r.ekipa))].filter(t => t && t !== '-' && t !== '-' && t !== 'Vse');
   // Combine with defaults
   const teams = ['Člani-A', 'Člani-B', ...usedTeams.filter(t => t !== 'Člani-A' && t !== 'Člani-B')];
 
@@ -114,12 +143,27 @@ function buildTeamFilters() {
 
 // ── FILTER & SORT ──
 function getHvFiltered() {
-  const now = Date.now();
-  const ms = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfWeek = new Date(startOfDay);
+  const dayOfWeek = (startOfWeek.getDay() + 6) % 7; // Monday = 0
+  startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+  const rollingMs = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
+
   return runs.filter(r => {
-    if (hvPeriod !== 'all' && ms[hvPeriod]) {
-      const d = new Date(r.datumIso);
-      if (isNaN(d) || (now - d.getTime()) > ms[hvPeriod]) return false;
+    if (hvPeriod !== 'all') {
+      const d = parseDateSafe(r.datumIso).getTime();
+      if (hvPeriod === 'day') {
+        if (d < startOfDay && (Date.now() - d) > rollingMs.day) return false;
+      } else if (hvPeriod === 'week') {
+        if (d < startOfWeek.getTime() && (Date.now() - d) > rollingMs.week) return false;
+      } else if (hvPeriod === 'month') {
+        if (d < startOfMonth && (Date.now() - d) > rollingMs.month) return false;
+      } else if (hvPeriod === 'year') {
+        if (d < startOfYear && (Date.now() - d) > rollingMs.year) return false;
+      }
     }
     if (hvDisc !== 'all' && r.disc !== hvDisc) return false;
     if (hvTeam !== 'all' && r.ekipa !== hvTeam) return false;
@@ -161,7 +205,11 @@ function buildHistoryView() {
   if (container) {
     container.innerHTML = '';
     if (!filtered.length) {
-      container.innerHTML = '<div class="hv-run-empty">Ni rezultatov za ta filter.</div>';
+      container.innerHTML = `
+        <div class="hv-run-empty">
+          <p style="margin-bottom:8px">Ni rezultatov za izbrane filtre.</p>
+          <button class="hv-tb-btn" onclick="resetHvPeriod()">Prikaži vse teke</button>
+        </div>`;
       updateHvStats();
       return;
     }
@@ -188,7 +236,7 @@ function renderCategorizedList(list, container) {
 function groupRuns(list, period) {
   const groups = new Map();
   for (const r of list) {
-    const d = new Date(r.datumIso);
+    const d = parseDateSafe(r.datumIso);
     let key;
     if (period === 'month') key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     else if (period === 'week') key = getISOWeekKey(d);
@@ -282,13 +330,22 @@ function makeRunItem(r) {
     <div class="hv-run-body">
       <span class="hv-run-time">${r.time}</span>
       <span class="hv-run-meta">${escapeHtml(r.ekipa)} \u00b7 ${r.disc === 'zimska' ? 'Zimska' : 'Letna'} \u00b7 ${r.datum}</span>
-    </div>`;
+    </div>
+    <button class="hv-run-hover-del" title="Izbriši ta vnos">&#128465;</button>`;
 
   let isSwiping = false;
   content.onclick = (e) => {
     if (isSwiping) { e.preventDefault(); return; }
     toggleHvRun(r.id);
   };
+
+  const hoverDel = content.querySelector('.hv-run-hover-del');
+  if (hoverDel) {
+    hoverDel.onclick = (e) => {
+      e.stopPropagation();
+      deleteSingleRun(r.id);
+    };
+  }
 
   const delBtn = document.createElement('div');
   delBtn.className = 'hv-run-delete-btn';
@@ -410,11 +467,29 @@ function toggleCategory(key, catEl) {
   else { hvExpanded.add(key); hdr.classList.add('open'); body.classList.add('open'); }
 }
 
-// ── STATS ──
+// ── STATS & TOOLBAR ──
 function updateHvStats() {
-  const selected = getHvFiltered().filter(r => hvChecked.has(r.id));
+  const filtered = getHvFiltered();
+  const selected = filtered.filter(r => hvChecked.has(r.id));
   const delBtn = document.getElementById('hvDeleteBtn');
   if (delBtn) delBtn.style.display = hvChecked.size > 0 ? '' : 'none';
+
+  // Toolbar elements
+  const countEl = document.getElementById('hvTbCount');
+  if (countEl) countEl.textContent = `Označenih: ${selected.length} / ${filtered.length}`;
+
+  const tbDelBtn = document.getElementById('hvDeleteSelectedBtn');
+  if (tbDelBtn) {
+    tbDelBtn.style.display = selected.length > 0 ? '' : 'none';
+    tbDelBtn.textContent = `Izbriši izbrane (${selected.length})`;
+  }
+
+  const selAllBtn = document.getElementById('hvSelectAllBtn');
+  if (selAllBtn) {
+    const allSelected = filtered.length > 0 && filtered.every(r => hvChecked.has(r.id));
+    selAllBtn.textContent = allSelected ? 'Odznači vse' : 'Izberi vse';
+  }
+
   if (!selected.length) {
     document.getElementById('hvPR').textContent = '\u2014';
     document.getElementById('hvAvg').textContent = '\u2014';
@@ -427,15 +502,57 @@ function updateHvStats() {
   document.getElementById('hvPR').textContent = fmtFull(best.ms);
   document.getElementById('hvAvg').textContent = fmtFull(avg);
   document.getElementById('hvCount').textContent = selected.length;
-  renderChart([...selected].sort((a, b) => new Date(a.datumIso) - new Date(b.datumIso)));
+  renderChart([...selected].sort((a, b) => parseDateSafe(a.datumIso) - parseDateSafe(b.datumIso)));
+}
+
+// ── SELECTION HELPERS ──
+function toggleSelectAll() {
+  const filtered = getHvFiltered();
+  const allSelected = filtered.length > 0 && filtered.every(r => hvChecked.has(r.id));
+  if (allSelected) {
+    filtered.forEach(r => hvChecked.delete(r.id));
+  } else {
+    filtered.forEach(r => hvChecked.add(r.id));
+  }
+  updateAllCheckmarksUI();
+  updateHvStats();
+}
+
+function deselectAll() {
+  hvChecked.clear();
+  updateAllCheckmarksUI();
+  updateHvStats();
+}
+
+function updateAllCheckmarksUI() {
+  document.querySelectorAll('#hvRuns .hv-run-item').forEach(el => {
+    const id = parseInt(el.dataset.id, 10);
+    const isChecked = hvChecked.has(id);
+    el.classList.toggle('checked', isChecked);
+    const chk = el.querySelector('.hv-run-check');
+    if (chk) chk.classList.toggle('checked', isChecked);
+  });
+  document.querySelectorAll('#hvRuns .hv-category').forEach(cat => updateCatCheckState(cat));
+}
+
+function resetHvPeriod() {
+  hvPeriod = 'all';
+  document.querySelectorAll('[data-period]').forEach(e => e.classList.toggle('active', e.dataset.period === 'all'));
+  buildHistoryView();
 }
 
 // ── DELETE SELECTED RUNS ──
 async function deleteSelected() {
   const ids = [...hvChecked];
   if (!ids.length) return;
+  if (!confirm(`Ali res želiš izbrisati ${ids.length} označenih rezultatov?`)) return;
+
   const btn = document.getElementById('hvDeleteBtn');
+  const tbBtn = document.getElementById('hvDeleteSelectedBtn');
   if (btn) btn.disabled = true;
+  if (tbBtn) tbBtn.disabled = true;
+
+  const idSet = new Set(ids.map(Number));
 
   if (authToken) {
     const failed = [];
@@ -452,12 +569,13 @@ async function deleteSelected() {
   } else {
     // Guest: remove from localStorage
     const stored = JSON.parse(localStorage.getItem('ssv_h') || '[]');
-    localStorage.setItem('ssv_h', JSON.stringify(stored.filter(r => !ids.includes(r.id))));
+    localStorage.setItem('ssv_h', JSON.stringify(stored.filter(r => !idSet.has(Number(r.id)))));
   }
 
-  runs = runs.filter(r => !ids.includes(r.id));
+  runs = runs.filter(r => !idSet.has(Number(r.id)));
   hvChecked.clear();
   if (btn) { btn.disabled = false; btn.style.display = 'none'; }
+  if (tbBtn) { tbBtn.disabled = false; tbBtn.style.display = 'none'; }
   buildHistoryView();
   showToast('Izbrisano: ' + ids.length);
 }
@@ -696,7 +814,7 @@ function setupResizer(el, body, side) {
     el.classList.add('dragging');
     startX = e.clientX;
     const cols = getComputedStyle(body).gridTemplateColumns.split(' ').map(v => parseFloat(v));
-    // cols: [filters, 4, runs, 4, stats] — runs is 1fr resolved to px
+    // cols: [filters, 4, runs, 4, stats] - runs is 1fr resolved to px
     startFW = cols[0] || 200;
     startSW = cols[4] || 280;
   });
