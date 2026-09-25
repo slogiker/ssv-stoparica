@@ -1,32 +1,32 @@
-SSV Stoparica — Device Info
+SSV Stoparica - Device Info
 ============================================================
 
-Device name      : SSV-STOP-A
-Service UUID     : 959e9299-896e-4d05-a747-3fe70fd2122c
-Characteristic   : 9c2c6e30-04f3-4ef0-8577-b4d9ca5f68c3
+Device name      : SSV-STOP-TEST
+Service UUID     : c6507f5d-db44-4b81-983e-cb4d35578d90
+Characteristic   : 609c2687-08e8-4655-88e5-8b4096fd5c2e
 
-QR URL           : https://ssv.slogiker.si/?device=959e9299-896e-4d05-a747-3fe70fd2122c&char=9c2c6e30-04f3-4ef0-8577-b4d9ca5f68c3
+QR URL           : https://ssv.slogiker.si/?device=c6507f5d-db44-4b81-983e-cb4d35578d90&char=609c2687-08e8-4655-88e5-8b4096fd5c2e
 
 ────────────────────────────────────────────────────────────
 Files in this folder
-  SSV-STOP-A.ino        — flash to ESP32 (Arduino IDE / esptool)
-  qr_SSV-STOP-A.png     — print & stick on the stop box
-  INFO_SSV-STOP-A.txt   — this file
+  SSV-STOP-TEST.ino        - flash to ESP32 (Arduino IDE / esptool)
+  qr_SSV-STOP-TEST.png     - print & stick on the stop box
+  INFO_SSV-STOP-TEST.txt   - this file
 
 ────────────────────────────────────────────────────────────
 How it works
-  1. Flash SSV-STOP-A.ino to the ESP32
-  2. Print qr_SSV-STOP-A.png and stick it on the box
+  1. Flash SSV-STOP-TEST.ino to the ESP32
+  2. Print qr_SSV-STOP-TEST.png and stick it on the box
   3. User scans QR with Chrome on Android
      → opens ssv.slogiker.si/?device=...&char=...
   4. App reads both UUIDs from the URL,
-     auto-scans for SSV-STOP-A and connects via BLE
+     auto-scans for SSV-STOP-TEST and connects via BLE
   5. Pressing the button sends 0x01 notify → app stops timer
 
 ────────────────────────────────────────────────────────────
 Wiring
-  GPIO 0  — stop button (to GND, INPUT_PULLUP)
-  GPIO 2  — onboard LED
+  GPIO 0  - stop button (to GND, INPUT_PULLUP)
+  GPIO 2  - onboard LED
              Blink 1Hz = advertising (waiting for phone)
              Solid ON  = phone connected
 
@@ -34,6 +34,6 @@ Wiring
 Troubleshooting
   - BLE not working? Make sure you use Chrome on Android
   - Wrong device connecting? Check the ?device= UUID matches
-  - Lost this file? UUIDs are also in SSV-STOP-A.ino (#define lines)
-  - Need a new QR? Re-run:  python3 tools/gen_esp.py --name A
+  - Lost this file? UUIDs are also in SSV-STOP-TEST.ino (#define lines)
+  - Need a new QR? Re-run:  python3 tools/gen_esp.py --name TEST
     (same name → same folder will be overwritten with fresh QR)

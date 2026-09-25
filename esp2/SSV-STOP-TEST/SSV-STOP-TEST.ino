@@ -1,12 +1,12 @@
-// SSV Stoparica — ESP2 stop button
+// SSV Stoparica - ESP2 stop button
 // Target: ESP32 WROOM-32U (external antenna)
 //
 // UUIDs and device name are replaced by tools/gen_esp.py when provisioning.
-// Do NOT flash this template directly — run gen_esp.py first.
+// Do NOT flash this template directly - run gen_esp.py first.
 //
 // Wiring:
-//   GPIO 0  — stop button (to GND, INPUT_PULLUP)
-//   GPIO 2  — onboard LED (status indicator)
+//   GPIO 0  - stop button (to GND, INPUT_PULLUP)
+//   GPIO 2  - onboard LED (status indicator)
 
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -16,13 +16,13 @@
 #include <BLEBeacon.h>
 #include <esp_gap_ble_api.h> // esp_ble_gap_update_conn_params() for supervision timeout
 
-// SERVICE_UUID is unique per device — replaced by gen_esp.py
-// CHARACTERISTIC_UUID is unique per device — both UUIDs are replaced by gen_esp.py at provisioning time
-#define SERVICE_UUID        "959e9299-896e-4d05-a747-3fe70fd2122c"
-#define CHARACTERISTIC_UUID "9c2c6e30-04f3-4ef0-8577-b4d9ca5f68c3"
-#define DEVICE_NAME         "SSV-STOP-A"
+// SERVICE_UUID is unique per device - replaced by gen_esp.py
+// CHARACTERISTIC_UUID is unique per device - both UUIDs are replaced by gen_esp.py at provisioning time
+#define SERVICE_UUID        "c6507f5d-db44-4b81-983e-cb4d35578d90"
+#define CHARACTERISTIC_UUID "609c2687-08e8-4655-88e5-8b4096fd5c2e"
+#define DEVICE_NAME         "SSV-STOP-TEST"
 
-#define BTN_PIN     0    // stop button — press pulls LOW (INPUT_PULLUP)
+#define BTN_PIN     0    // stop button - press pulls LOW (INPUT_PULLUP)
 #define LED_PIN     2    // button built-in LED (GPIO 2)
 
 // LED wiring polarity:
@@ -33,22 +33,18 @@
 // Press feedback effect duration
 #define PRESS_EFFECT_MS 500
 
-// TX Power broadcast in advertisement (dBm at 1 m — used by app for distance estimate).
-// ESP32-WROOM-32U with external antenna: calibrate by measuring RSSI at exactly 1 m.
-// A good starting value is -59 dBm (typical for ESP32 at 0 dBm TX, 1 m open space).
-#define TX_POWER_AT_1M  -59
-
 BLEServer*         pServer         = nullptr;
 BLECharacteristic* pCharacteristic = nullptr;
 BLEAdvertising*    pAdvertising    = nullptr;
 
-// volatile: written from BLE callback task, read from loop() — prevents compiler register-caching
+// volatile: written from BLE callback task, read from loop() - prevents compiler register-caching
 volatile bool deviceConnected  = false;
 volatile bool pendingReconnect = false;   // set in callback, handled in loop() to avoid BLE stack re-entry
 static   uint32_t reconnectAt  = 0;       // millis() timestamp when re-advertise should fire (Phase 2)
 static   uint32_t lockoutUntil = 0;       // lockout window to prevent button bounce double-triggers
 static   uint32_t lastActiveTime = 0;     // auto deep sleep on connection inactivity
-#define  SLEEP_TIMEOUT_MS 180000          // 3 minutes before entering deep sleep
+#define  ENABLE_DEEP_SLEEP false          // disabled by default because physical power switch is used
+#define  SLEEP_TIMEOUT_MS  600000         // 10 minutes before entering deep sleep (if enabled)
 
 // Software button debounce
 bool     btnRaw        = HIGH;
@@ -84,13 +80,11 @@ void setLedMode(LedMode mode) {
 void updateLed() {
   uint32_t now = millis();
 
-  // 1. Strobe override when button is pressed (gives instant visual confirmation)
+  // 1. Solid feedback when button is pressed
   if (currentLedMode == LED_MODE_PRESSED) {
     uint32_t elapsed = now - pressEffectStart;
     if (elapsed < PRESS_EFFECT_MS) {
-      // Strobe toggle every 25ms (~20Hz frequency)
-      bool strobeOn = (elapsed / 25) % 2 == 0;
-      setLedBrightness(strobeOn ? 255 : 0);
+      setLedBrightness(255);
       return;
     } else {
       // Revert to correct state based on current connection
@@ -134,7 +128,7 @@ class ServerCallbacks : public BLEServerCallbacks {
     setLedMode(LED_MODE_CONNECTED);
     Serial.println("[BLE] Connected");
     // Phase 2: increase supervision timeout to 6 s (600 × 10 ms).
-    // Default ~720 ms is too aggressive for gymnasium RF environments —
+    // Default ~720 ms is too aggressive for gymnasium RF environments -
     // brief interference causes false disconnects. 6 s gives the link
     // time to recover without dropping.
     esp_ble_conn_update_params_t params = {};
@@ -148,7 +142,7 @@ class ServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer*) override {
     deviceConnected  = false;
     pendingReconnect = true;       // restart advertising safely from loop()
-    Serial.println("[BLE] Disconnected — will re-advertise");
+    Serial.println("[BLE] Disconnected - will re-advertise");
   }
 };
 
@@ -157,7 +151,7 @@ void setup() {
   setCpuFrequencyMhz(80); // Lower clock frequency to 80MHz to save ~50% battery
   Serial.begin(115200);
 
-  // LED on immediately — power indicator
+  // LED on immediately - power indicator
   pinMode(LED_PIN, OUTPUT);
   setLedBrightness(255);
 
@@ -166,7 +160,7 @@ void setup() {
 
   BLEDevice::init(DEVICE_NAME);
 
-  // Set TX power to 0 dBm — consistent, documented reference point for distance math.
+  // Set TX power to 0 dBm - consistent, documented reference point for distance math.
   // ESP32 supports: -12, -9, -6, -3, 0, 3, 6, 9 dBm via ESP_PWR_LVL_* constants.
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_N0);   // 0 dBm advertising
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_N0); // 0 dBm GATT
@@ -187,23 +181,17 @@ void setup() {
   pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  // Preferred connection intervals — helps iOS/Android stability
+  // Preferred connection intervals - helps iOS/Android stability
   pAdvertising->setMinPreferred(0x06);
   pAdvertising->setMaxPreferred(0x12);
 
-  // Advertise TX Power Level (AD type 0x0A) in scan response so the app can
-  // compute distance via: d = 10 ^ ((TxPowerAt1m - RSSI) / (10 * n))
-  // BLEAdvertisementData lets us append raw AD structures.
   BLEAdvertisementData scanResp;
   scanResp.setName(DEVICE_NAME);
-  // TX Power Level AD structure: length=2, type=0x0A, value=TX_POWER_AT_1M
-  uint8_t txAdv[3] = { 0x02, 0x0A, (uint8_t)(int8_t)TX_POWER_AT_1M };
-  scanResp.addData((char*)txAdv, 3);
   pAdvertising->setScanResponseData(scanResp);
 
   pAdvertising->start();
 
-  Serial.println("[SSV] " DEVICE_NAME " ready — advertising");
+  Serial.println("[SSV] " DEVICE_NAME " ready - advertising");
 }
 
 // ── Loop ─────────────────────────────────────────────────────────────────────
@@ -212,7 +200,7 @@ void loop() {
 
   if (deviceConnected) {
     lastActiveTime = now;
-  } else if (now - lastActiveTime >= SLEEP_TIMEOUT_MS) {
+  } else if (ENABLE_DEEP_SLEEP && (now - lastActiveTime >= SLEEP_TIMEOUT_MS)) {
     Serial.println("[SYSTEM] Inactivity timeout. Entering deep sleep...");
     setLedBrightness(0); // Turn off LED
     // Wake up on BTN_PIN (GPIO 0) going LOW (0)
@@ -220,7 +208,7 @@ void loop() {
     esp_deep_sleep_start();
   }
 
-  // Phase 2: non-blocking reconnect — schedule re-advertise 200ms from now instead of
+  // Phase 2: non-blocking reconnect - schedule re-advertise 200ms from now instead of
   // blocking with delay(200). This keeps loop() running so button presses are not missed.
   if (pendingReconnect && reconnectAt == 0) {
     reconnectAt = millis() + 200;  // schedule for 200ms from now
@@ -236,7 +224,7 @@ void loop() {
   // Update LED effects (breathing, heartbeat, or strobe)
   updateLed();
 
-  // Button: software debounce — detect HIGH→LOW edge only
+  // Button: software debounce - detect HIGH→LOW edge only
   bool raw = digitalRead(BTN_PIN);
   if (raw != btnRaw) {
     btnRaw        = raw;
@@ -247,13 +235,11 @@ void loop() {
     if (btnStable == LOW) {
       if (now >= lockoutUntil) {
         lockoutUntil = now + 1000; // 1-second lockout window to prevent false double-clicks
+        lastActiveTime = now;      // reset sleep inactivity timer on user activity
         setLedMode(LED_MODE_PRESSED);
         if (deviceConnected) {
           uint8_t val = 0x01;
           pCharacteristic->setValue(&val, 1);
-          // Send 3 times in rapid succession to guarantee delivery under heavy RF noise
-          pCharacteristic->notify();
-          pCharacteristic->notify();
           pCharacteristic->notify();
           Serial.println("[SSV] Stop signal sent (0x01)");
         } else {
@@ -263,5 +249,5 @@ void loop() {
     }
   }
 
-  delay(5);   // ~200 Hz loop — responsive debounce, low CPU load
+  delay(5);   // ~200 Hz loop - responsive debounce, low CPU load
 }

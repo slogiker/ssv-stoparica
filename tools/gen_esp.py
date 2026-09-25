@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gen_esp.py — SSV Stoparica device provisioning tool
+gen_esp.py - SSV Stoparica device provisioning tool
 
 Run once per physical ESP32 stop box:
   python3 tools/gen_esp.py --name Hamercani
@@ -9,9 +9,9 @@ Run once per physical ESP32 stop box:
   python3 tools/gen_esp.py          # auto-assigns next letter (A, B, C, ...)
 
 What it produces in esp2/SSV-STOP-{suffix}/  (suffix = name or letter):
-  SSV-STOP-{suffix}.ino        — flash this to the ESP32
-  qr_SSV-STOP-{suffix}.png     — stick this on the stop box (encodes both UUIDs)
-  INFO_SSV-STOP-{suffix}.txt   — all details for reference
+  SSV-STOP-{suffix}.ino        - flash this to the ESP32
+  qr_SSV-STOP-{suffix}.png     - stick this on the stop box (encodes both UUIDs)
+  INFO_SSV-STOP-{suffix}.txt   - all details for reference
 
 Workflow:
   1. Run this script → folder created with all three files
@@ -68,7 +68,7 @@ def main():
     parser.add_argument(
         "--name", "-n", metavar="SUFFIX",
         help=(
-            "Custom suffix — becomes the full device identity. "
+            "Custom suffix - becomes the full device identity. "
             f"Letters, digits and hyphens only. Max {MAX_SUFFIX_LEN} chars. "
             "Result: SSV-STOP-<SUFFIX>. Takes precedence over --letter."
         ),
@@ -110,13 +110,13 @@ def main():
         suffix = next_device_letter()
 
     device_name = f"SSV-STOP-{suffix}"
-    svc_uuid    = str(uuid.uuid4()).lower()   # unique per device — identifies which box
-    chr_uuid    = str(uuid.uuid4()).lower()   # unique per device — BLE notify channel
+    svc_uuid    = str(uuid.uuid4()).lower()   # unique per device - identifies which box
+    chr_uuid    = str(uuid.uuid4()).lower()   # unique per device - BLE notify channel
     domain      = args.domain.rstrip("/")
 
     out_dir = ESP2_DIR / device_name
     if out_dir.exists():
-        print(f"WARNING: {out_dir} already exists — files will be overwritten.")
+        print(f"WARNING: {out_dir} already exists - files will be overwritten.")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Patch firmware template ──────────────────────────────────────────────
@@ -137,9 +137,9 @@ def main():
     ino_path = out_dir / f"{device_name}.ino"
     ino_path.write_text(patched, encoding="utf-8")
 
-    # ── QR code — both UUIDs in URL so app can read them on scan ────────────
+    # ── QR code - both UUIDs in URL so app can read them on scan ────────────
     url = f"https://{domain}/?device={svc_uuid}&char={chr_uuid}"
-    # ERROR_CORRECT_H (30% redundancy) — stickers are used in dusty/wet
+    # ERROR_CORRECT_H (30% redundancy) - stickers are used in dusty/wet
     # fire-training conditions; H handles up to 30% damage without scan failure.
     qr = qrcode.QRCode(
         version=None,
@@ -156,7 +156,7 @@ def main():
     # ── Info file ────────────────────────────────────────────────────────────
     info_path = out_dir / f"INFO_{device_name}.txt"
     info_path.write_text(
-        f"SSV Stoparica — Device Info\n"
+        f"SSV Stoparica - Device Info\n"
         f"{'='*60}\n\n"
         f"Device name      : {device_name}\n"
         f"Service UUID     : {svc_uuid}\n"
@@ -164,9 +164,9 @@ def main():
         f"QR URL           : {url}\n\n"
         f"{'─'*60}\n"
         f"Files in this folder\n"
-        f"  {device_name}.ino        — flash to ESP32 (Arduino IDE / esptool)\n"
-        f"  qr_{device_name}.png     — print & stick on the stop box\n"
-        f"  INFO_{device_name}.txt   — this file\n\n"
+        f"  {device_name}.ino        - flash to ESP32 (Arduino IDE / esptool)\n"
+        f"  qr_{device_name}.png     - print & stick on the stop box\n"
+        f"  INFO_{device_name}.txt   - this file\n\n"
         f"{'─'*60}\n"
         f"How it works\n"
         f"  1. Flash {device_name}.ino to the ESP32\n"
@@ -178,8 +178,8 @@ def main():
         f"  5. Pressing the button sends 0x01 notify → app stops timer\n\n"
         f"{'─'*60}\n"
         f"Wiring\n"
-        f"  GPIO 0  — stop button (to GND, INPUT_PULLUP)\n"
-        f"  GPIO 2  — onboard LED\n"
+        f"  GPIO 0  - stop button (to GND, INPUT_PULLUP)\n"
+        f"  GPIO 2  - onboard LED\n"
         f"             Blink 1Hz = advertising (waiting for phone)\n"
         f"             Solid ON  = phone connected\n\n"
         f"{'─'*60}\n"
