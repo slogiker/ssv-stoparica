@@ -437,12 +437,13 @@ function getDeviceUUIDs() {
   let svc = sessionStorage.getItem('ssv_svc') || localStorage.getItem('ssv_svc');
   let chr = sessionStorage.getItem('ssv_chr') || localStorage.getItem('ssv_chr');
 
-  // If no URL/session UUIDs, use the first saved device from account
-  if (!svc && savedDevices.length > 0) {
+  // If no URL/session UUIDs or using placeholder, use the first saved device from account
+  if ((!svc || svc === DEFAULT_SVC) && savedDevices.length > 0) {
     svc = savedDevices[0].svc_uuid;
     chr = savedDevices[0].char_uuid;
     if (svc) localStorage.setItem('ssv_svc', svc);
     if (chr) localStorage.setItem('ssv_chr', chr);
+    if (savedDevices[0].friendly_name) localStorage.setItem('ssv_friendly_name', savedDevices[0].friendly_name);
   }
 
   return { svc: svc || DEFAULT_SVC, chr: chr || DEFAULT_CHR };
@@ -453,8 +454,21 @@ async function fetchDevices() {
   try {
     savedDevices = await apiGet('/devices');
     updateDevicesUI();
+    if (savedDevices.length > 0) {
+      const dev = savedDevices[0];
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get('device')) {
+        localStorage.setItem('ssv_svc', dev.svc_uuid);
+        localStorage.setItem('ssv_chr', dev.char_uuid);
+        if (dev.friendly_name) localStorage.setItem('ssv_friendly_name', dev.friendly_name);
+      }
+      const descEl = document.getElementById('bleDeviceDesc');
+      if (descEl && (!bleDevice || !bleDevice.gatt?.connected)) {
+        descEl.textContent = dev.friendly_name || 'Moja naprava';
+      }
+    }
   } catch (e) {
-    showToast('Napaka pri nalaganju naprav.');
+    console.warn('BLE: Napaka pri nalaganju naprav:', e.message);
   }
 }
 
@@ -488,6 +502,22 @@ function setDot(state, label) {
   document.getElementById('bleLabel').textContent = label;
 }
 
+function findPairedDevice(known) {
+  if (!Array.isArray(known) || known.length === 0) return null;
+  const targetFriendly = (savedDevices[0]?.friendly_name || localStorage.getItem('ssv_friendly_name') || '').toLowerCase();
+  // 1. Check exact or partial match with saved friendly name
+  if (targetFriendly) {
+    const match = known.find(d => d.name && (d.name.toLowerCase() === targetFriendly || d.name.toLowerCase().includes(targetFriendly)));
+    if (match) return match;
+  }
+  // 2. Check for SSV prefix (e.g. SSV-STOP-A, SSV-STOP-TEST, etc.)
+  const ssvMatch = known.find(d => d.name && d.name.toLowerCase().startsWith('ssv'));
+  if (ssvMatch) return ssvMatch;
+  // 3. If user has only granted permission to one BLE device on this origin, that is our device
+  if (known.length === 1) return known[0];
+  return null;
+}
+
 async function bleConnect() {
   if (!navigator.bluetooth) {
     console.error('BLE: Web Bluetooth API is not supported in this browser context (requires HTTPS or localhost).');
@@ -506,9 +536,10 @@ async function bleConnect() {
 
   const { svc, chr } = getDeviceUUIDs();
   console.log('BLE: Starting connection sequence. Configured UUIDs - Service:', svc, 'Characteristic:', chr);
-  _reconnectDelay = 2000; // reset backoff on every manual tap
+  _reconnectDelay = 2000; // reset backoff on manual tap
+  _reconnectAttempts = 0;
   if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
-  setDot('scanning', 'Išče SSV-STOP...');
+  setDot('scanning', 'Išče napravo...');
  
   try {
     // Try to silently reconnect to a previously permitted device first - skips the browser picker
@@ -516,7 +547,7 @@ async function bleConnect() {
       try {
         console.log('BLE: Checking for previously paired devices...');
         const known = await navigator.bluetooth.getDevices();
-        const prev = known.find(d => d.name?.startsWith('SSV-STOP'));
+        const prev = findPairedDevice(known);
         if (prev) {
           console.log('BLE: Found matching previously paired device:', prev.name, 'Attempting auto-reconnect...');
           bleDevice = prev;
@@ -547,9 +578,17 @@ async function bleConnect() {
     }
  
     // First time or previously known device out of range - show browser picker
-    console.log('BLE: Requesting device list from browser picker (prefix: SSV-STOP)...');
+    const reqFilters = [{ namePrefix: 'SSV' }];
+    const friendly = savedDevices[0]?.friendly_name || localStorage.getItem('ssv_friendly_name');
+    if (friendly && !friendly.toUpperCase().startsWith('SSV')) {
+      reqFilters.push({ namePrefix: friendly });
+    }
+    if (svc && svc !== DEFAULT_SVC) {
+      reqFilters.push({ services: [svc] });
+    }
+    console.log('BLE: Requesting device list from browser picker with filters:', reqFilters);
     bleDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'SSV-STOP' }],
+      filters: reqFilters,
       optionalServices: [svc]
     });
     console.log('BLE: Device selected:', bleDevice.name, 'ID:', bleDevice.id);
@@ -598,6 +637,8 @@ async function bleGattConnect(svc, chr) {
   // Persist working UUIDs in localStorage
   localStorage.setItem('ssv_svc', svc);
   localStorage.setItem('ssv_chr', chr);
+  _reconnectAttempts = 0;
+  _reconnectDelay = 2000;
   // Clear any active reconnect countdown - we are connected
   if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   setDot('connected', bleDevice.name || 'SSV-STOP');
@@ -623,6 +664,9 @@ function onBleVal(e) {
   }
 }
  
+let _reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5; // ~50-60s total backoff retry before assuming button is off
+
 function onDisconn() {
   console.warn('BLE: Device disconnected:', bleDevice ? bleDevice.name : 'Unknown');
   bleChar = null;
@@ -631,6 +675,8 @@ function onDisconn() {
   // Stop RSSI watch - device is gone
   if (_rssiWatchAbort) { try { _rssiWatchAbort.abort(); } catch (_) {} _rssiWatchAbort = null; }
   _rssiEma = null;
+  _reconnectAttempts = 0;
+  _reconnectDelay = 2000;
   setDot('lost', 'Prekinjena - znova se povezujem...');
   clearTimeout(reconnectTimer);
   scheduleReconnect();
@@ -656,17 +702,26 @@ function startReconnectCountdown(ms) {
 }
  
 function scheduleReconnect() {
-  console.log('BLE: Reconnect scheduled in ' + _reconnectDelay + 'ms.');
+  if (!bleDevice || bleChar) return;
+  _reconnectAttempts++;
+  if (_reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+    console.log('BLE: Button appears to be turned off or out of range after ' + MAX_RECONNECT_ATTEMPTS + ' attempts. Pausing auto-reconnect.');
+    if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
+    setDot('offline', 'ESP2 je izklopljen ali izven dosega (tapni za povezavo)');
+    return;
+  }
+  console.log('BLE: Reconnect attempt ' + _reconnectAttempts + '/' + MAX_RECONNECT_ATTEMPTS + ' scheduled in ' + _reconnectDelay + 'ms.');
   startReconnectCountdown(_reconnectDelay);
   reconnectTimer = setTimeout(async () => {
     if (!bleDevice || bleChar || _isConnecting) return; // forgotten, already reconnected, or in progress
     _isConnecting = true;
-    console.log('BLE: Attempting scheduled reconnect...');
-    setDot('scanning', 'Znova se povezujem...');
+    console.log('BLE: Attempting scheduled reconnect (' + _reconnectAttempts + '/' + MAX_RECONNECT_ATTEMPTS + ')...');
+    setDot('scanning', 'Znova se povezujem (' + _reconnectAttempts + '/' + MAX_RECONNECT_ATTEMPTS + ')...');
     const { svc, chr } = getDeviceUUIDs();
     try {
       await bleGattConnect(svc, chr);
       _reconnectDelay = 2000; // reset on success
+      _reconnectAttempts = 0;
     } catch (e) {
       console.warn('BLE: Scheduled reconnect attempt failed:', e);
       _reconnectDelay = Math.min(_reconnectDelay * 2, 10000);
@@ -682,6 +737,7 @@ function forgetDevice() {
   clearTimeout(reconnectTimer);
   if (_reconnectCountdownInterval) { clearInterval(_reconnectCountdownInterval); _reconnectCountdownInterval = null; }
   _reconnectDelay = 2000;
+  _reconnectAttempts = 0;
   if (_rssiWatchAbort) { try { _rssiWatchAbort.abort(); } catch (_) {} _rssiWatchAbort = null; }
   _rssiEma = null;
   clearSignalUI();
@@ -1102,6 +1158,10 @@ async function doLogin(login, geslo) {
     updateAuthUI();
     showToast('Dobrodošel, ' + currentUser + '!');
     syncRunsFromServer();
+    await fetchDevices();
+    if (!bleChar && !_isConnecting) {
+      bleAutoConnect();
+    }
   } catch (e) {
     document.getElementById('authError').textContent = e.message;
   }
@@ -1118,6 +1178,11 @@ async function doRegister(ime, email, geslo) {
     await checkMigration();
     updateAuthUI();
     showToast('Registracija uspešna. Dobrodošel, ' + currentUser + '!');
+    syncRunsFromServer();
+    await fetchDevices();
+    if (!bleChar && !_isConnecting) {
+      bleAutoConnect();
+    }
   } catch (e) {
     document.getElementById('authError').textContent = e.message;
   }
@@ -1127,12 +1192,15 @@ function doLogout() {
   authToken = null; currentUser = null;
   localStorage.removeItem('ssv_token');
   localStorage.removeItem('ssv_user');
+  localStorage.removeItem('ssv_friendly_name');
+  savedDevices = [];
+  updateDevicesUI();
   history = []; localStorage.removeItem('ssv_h');
   pr = null;
   // Clear both strips so a new guest session starts clean
-  document.getElementById('lastTime').textContent = '\u2014';
-  document.getElementById('prTime').textContent = '\u2014';
-  document.getElementById('todayTime').textContent = '\u2014';
+  document.getElementById('lastTime').textContent = '-';
+  document.getElementById('prTime').textContent = '-';
+  document.getElementById('todayTime').textContent = '-';
   document.getElementById('lastPr').className = 'last-pr';
   document.getElementById('lastStrip').style.opacity = '.5';
   document.getElementById('prStrip').style.opacity = '.5';
@@ -1512,7 +1580,7 @@ async function bleAutoConnect() {
     try {
       console.log('BLE Auto-Connect: Checking for previously paired devices...');
       const known = await navigator.bluetooth.getDevices();
-      const prev = known.find(d => d.name?.startsWith('SSV-STOP'));
+      const prev = findPairedDevice(known);
       if (prev) {
         console.log('BLE Auto-Connect: Found matching previously paired device:', prev.name, 'Attempting auto-reconnect...');
         setDot('scanning', 'Povezujem...');
@@ -1538,7 +1606,12 @@ async function bleAutoConnect() {
           setDot('', 'Tapni za povezavo z ESP2');
         }
       } else {
-        console.log('BLE Auto-Connect: No previously paired devices found.');
+        console.log('BLE Auto-Connect: No previously paired devices found in browser permissions.');
+        const friendly = savedDevices[0]?.friendly_name || localStorage.getItem('ssv_friendly_name');
+        if (friendly) {
+          setDot('', 'Tapni za povezavo: ' + friendly);
+          document.getElementById('bleDeviceDesc').textContent = friendly;
+        }
       }
     } catch (e) {
       console.log('BLE Auto-Connect: Auto-reconnect failed/ignored:', e.message);
@@ -1550,7 +1623,14 @@ async function bleAutoConnect() {
     _isConnecting = false;
   }
 }
-bleAutoConnect();
+
+// Initial startup: if logged in, sync devices from account before auto-connecting
+(async () => {
+  if (authToken) {
+    try { await fetchDevices(); } catch (_) {}
+  }
+  bleAutoConnect();
+})();
 
 function openHistoryPanel() {
   const panel = document.getElementById('historyPanel');

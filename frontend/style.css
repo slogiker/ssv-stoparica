@@ -157,6 +157,7 @@ body {
 .ble-dot.scanning  { background:var(--blue);animation:blink .5s infinite alternate; }
 .ble-dot.connected { background:var(--acc);box-shadow:0 0 5px var(--acc);animation:breathe 2.5s infinite; }
 .ble-dot.lost      { background:var(--danger); }
+.ble-dot.offline   { background:var(--muted);box-shadow:0 0 0 1.5px rgba(255,255,255,0.2); }
 @keyframes blink   { to{opacity:.3} }
 @keyframes breathe { 0%,100%{opacity:1}50%{opacity:.5} }
 .ble-label {
