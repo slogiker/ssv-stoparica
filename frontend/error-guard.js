@@ -132,7 +132,7 @@
           throw e;
         }
       } else {
-        // Refresh failed — session is truly expired; signal app to log out
+        // Refresh failed: session is truly expired; signal app to log out
         localStorage.removeItem('ssv_token');
         window.dispatchEvent(new Event('ssv:logout'));
       }
@@ -183,7 +183,7 @@
   }
 
   window.startWatchdog = function () {
-    // Immediate check on startup — no need to wait 60s to discover server is down
+    // Immediate check on startup: no need to wait 60s to discover server is down
     _healthCheck(false);
     setInterval(() => _healthCheck(true), 60000);
 
@@ -195,7 +195,7 @@
       try {
         const r = await _fetch('/api/health');
         if (r.ok) { missedChecks = 0; hideBanner(); }
-        // On failure here: don't increment — we just came back from hidden,
+        // On failure here: don't increment - we just came back from hidden,
         // could be momentary network reattach. Let the regular interval handle it.
       } catch {}
     });

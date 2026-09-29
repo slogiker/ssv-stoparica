@@ -347,6 +347,16 @@ body {
   transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
 }
 .account-panel.open .panel-body { transform:translateX(0); }
+
+/* History overlay panel - full screen slide up */
+.history-panel .panel-body {
+  position:absolute;inset:0;width:100%;height:100%;
+  background:var(--bg);
+  transform:translateY(100%);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.history-panel.open .panel-body { transform:translateY(0); }
 .acc-identity {
   display:flex;flex-direction:column;align-items:center;
   gap:8px;padding:24px 20px 20px;border-bottom:1px solid var(--border);

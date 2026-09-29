@@ -38,7 +38,7 @@
     </div>
     <div class="topbar-actions">
       <button class="ico-btn lit" id="soundBtn" onclick="toggleSound()" title="Zvok" aria-label="Preklopi zvok">&#128266;</button>
-      <button class="ico-btn" id="historyBtn" onclick="location.href='history.html'" title="Zgodovina" aria-label="Odpri zgodovino">&#8801;</button>
+      <button class="ico-btn" id="historyBtn" onclick="openHistoryPanel()" title="Zgodovina" aria-label="Odpri zgodovino">&#8801;</button>
       <button class="ico-btn" id="authBtn" onclick="openAuthModal()" title="Prijava" aria-label="Prijava / račun">&#128100;</button>
       <button class="ico-btn" id="settingsBtn" onclick="openSettings()" title="Nastavitve" aria-label="Odpri nastavitve">&#9881;</button>
     </div>
@@ -453,6 +453,13 @@
     </div>
     
     <button class="auth-submit" onclick="forgetDevice(); closeBleDiag();" style="background:var(--danger); color:#fff; margin-top:8px; height:36px; border-radius:6px; font-size:12px; cursor:pointer;">Pozabi napravo</button>
+  </div>
+</div>
+
+<!-- ── HISTORY OVERLAY PANEL ── -->
+<div class="panel history-panel" id="historyPanel" style="z-index:250">
+  <div class="panel-body" style="width:100%;height:100%;max-width:100%;background:var(--bg);border:none;padding:0">
+    <iframe id="historyFrame" src="about:blank" style="width:100%;height:100%;border:none;display:block" title="Zgodovina"></iframe>
   </div>
 </div>
 

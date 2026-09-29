@@ -1,7 +1,7 @@
 {
   "name": "SSV Stoparica",
   "short_name": "Stoparica",
-  "description": "Štoparica za SSV tekmovanja — zimska in letna liga",
+  "description": "Štoparica za SSV tekmovanja - zimska in letna liga",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
