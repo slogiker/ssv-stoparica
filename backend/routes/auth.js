@@ -18,25 +18,26 @@ router.post('/register', async (req, res) => {
   if (!ime || !email || !geslo) {
     return res.status(400).json({ napaka: 'Ime, e-pošta in geslo so obvezni.' });
   }
-  if (typeof ime !== 'string' || ime.trim().length > 100) {
-    return res.status(400).json({ napaka: 'Ime je predolgo (največ 100 znakov).' });
+  if (typeof ime !== 'string' || !ime.trim() || ime.trim().length > 100) {
+    return res.status(400).json({ napaka: 'Ime je neveljavno ali predolgo (največ 100 znakov).' });
   }
-  if (typeof email !== 'string' || email.length > 254) {
-    return res.status(400).json({ napaka: 'E-poštni naslov je predolg.' });
+  if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ napaka: 'Neveljaven ali predolg e-poštni naslov.' });
   }
-  if (geslo.length < 8) {
-    return res.status(400).json({ napaka: 'Geslo mora imeti vsaj 8 znakov.' });
+  if (typeof geslo !== 'string' || geslo.length < 8 || geslo.length > 128) {
+    return res.status(400).json({ napaka: 'Geslo mora imeti med 8 in 128 znakov.' });
   }
-  // Pre-check for duplicate email — avoids exposing a generic 500 for the common case.
+  const cleanEmail = email.trim().toLowerCase();
+  // Pre-check for duplicate email - avoids exposing a generic 500 for the common case.
   // Note: a tiny race window remains; the UNIQUE constraint is the real guard (caught below).
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(cleanEmail);
   if (existing) {
     return res.status(409).json({ napaka: 'Ta e-poštni naslov je že registriran.' });
   }
   try {
     const geslo_hash = await bcrypt.hash(geslo, SALT_ROUNDS);
-    const result = db.prepare('INSERT INTO users (ime, email, geslo_hash) VALUES (?, ?, ?)').run(ime.trim(), email, geslo_hash);
-    const token = jwt.sign({ id: result.lastInsertRowid, ime: ime.trim(), email, role: 'user' }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
+    const result = db.prepare('INSERT INTO users (ime, email, geslo_hash, role) VALUES (?, ?, ?, ?)').run(ime.trim(), cleanEmail, geslo_hash, 'user');
+    const token = jwt.sign({ id: result.lastInsertRowid, ime: ime.trim(), email: cleanEmail, role: 'user' }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
     res.status(201).json({ token, ime: ime.trim() });
   } catch (e) {
     // SQLite UNIQUE constraint fires on concurrent duplicate-email registrations
@@ -51,18 +52,21 @@ router.post('/register', async (req, res) => {
 // Body: { login (ime or email), geslo }
 router.post('/login', async (req, res) => {
   const { login, geslo } = req.body;
-  if (!login || !geslo) {
+  if (!login || !geslo || typeof login !== 'string' || typeof geslo !== 'string') {
     return res.status(400).json({ napaka: 'Prijava in geslo sta obvezna.' });
   }
   // Try email first (UNIQUE-indexed, unambiguous). Only fall back to ime if
-  // the value doesn't look like an email — ime has no UNIQUE constraint so
+  // the value doesn't look like an email - ime has no UNIQUE constraint so
   // matching on it for a value that IS an email could hit the wrong row.
-  const looksLikeEmail = typeof login === 'string' && login.includes('@');
-  let user = db.prepare('SELECT * FROM users WHERE email = ?').get(login);
-  if (!user && !looksLikeEmail) {
-    // ime lookup: if multiple users share a name this returns one arbitrarily;
-    // acceptable since ime is not guaranteed unique but email is preferred.
-    user = db.prepare('SELECT * FROM users WHERE ime = ?').get(login);
+  const trimmedLogin = login.trim();
+  const looksLikeEmail = trimmedLogin.includes('@');
+  let user = null;
+  if (looksLikeEmail) {
+    user = db.prepare('SELECT * FROM users WHERE email = ?').get(trimmedLogin.toLowerCase());
+  } else {
+    // Check email first in case someone typed it without standard check, then ime
+    user = db.prepare('SELECT * FROM users WHERE email = ?').get(trimmedLogin.toLowerCase())
+      || db.prepare('SELECT * FROM users WHERE ime = ?').get(trimmedLogin);
   }
   if (!user) {
     return res.status(401).json({ napaka: 'Napačna prijava ali geslo.' });
@@ -72,34 +76,38 @@ router.post('/login', async (req, res) => {
     if (!match) {
       return res.status(401).json({ napaka: 'Napačna prijava ali geslo.' });
     }
-    const token = jwt.sign({ id: user.id, ime: user.ime, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
+    const token = jwt.sign({ id: user.id, ime: user.ime, email: user.email, role: user.role || 'user' }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
     res.json({ token, ime: user.ime });
   } catch (e) {
     res.status(500).json({ napaka: 'Napaka pri prijavi. Prosimo, poskusite znova.' });
   }
 });
 
-// PUT /api/auth/profile  — update display name
+// PUT /api/auth/profile  - update display name
 router.put('/profile', requireAuth, async (req, res) => {
   const { ime } = req.body;
-  if (!ime || !ime.trim()) return res.status(400).json({ napaka: 'Ime ne sme biti prazno.' });
-  if (typeof ime !== 'string' || ime.trim().length > 100) {
+  if (!ime || typeof ime !== 'string' || !ime.trim()) return res.status(400).json({ napaka: 'Ime ne sme biti prazno.' });
+  if (ime.trim().length > 100) {
     return res.status(400).json({ napaka: 'Ime je predolgo (največ 100 znakov).' });
   }
   try {
     db.prepare('UPDATE users SET ime = ? WHERE id = ?').run(ime.trim(), req.user.id);
-    const token = jwt.sign({ id: req.user.id, ime: ime.trim(), email: req.user.email, role: req.user.role }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
+    const token = jwt.sign({ id: req.user.id, ime: ime.trim(), email: req.user.email, role: req.user.role || 'user' }, process.env.JWT_SECRET, { expiresIn: TOKEN_TTL });
     res.json({ token, ime: ime.trim() });
   } catch (e) {
     res.status(500).json({ napaka: 'Napaka pri posodabljanju profila.' });
   }
 });
 
-// PUT /api/auth/password  — change password
+// PUT /api/auth/password  - change password
 router.put('/password', requireAuth, async (req, res) => {
   const { trenutno, novo } = req.body;
-  if (!trenutno || !novo) return res.status(400).json({ napaka: 'Obe gesli sta obvezni.' });
-  if (novo.length < 8) return res.status(400).json({ napaka: 'Novo geslo mora imeti vsaj 8 znakov.' });
+  if (!trenutno || !novo || typeof trenutno !== 'string' || typeof novo !== 'string') {
+    return res.status(400).json({ napaka: 'Obe gesli sta obvezni.' });
+  }
+  if (novo.length < 8 || novo.length > 128) {
+    return res.status(400).json({ napaka: 'Novo geslo mora imeti med 8 in 128 znakov.' });
+  }
   try {
     const user = db.prepare('SELECT geslo_hash FROM users WHERE id = ?').get(req.user.id);
     const match = await bcrypt.compare(trenutno, user.geslo_hash);
@@ -112,12 +120,12 @@ router.put('/password', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/auth/refresh  — issue a fresh 7-day token for an authenticated session.
+// POST /api/auth/refresh  - issue a fresh 7-day token for an authenticated session.
 // Call this when the stored token is within 2 days of expiry (or on any 401 to retry once).
 router.post('/refresh', requireAuth, (req, res) => {
   try {
     const token = jwt.sign(
-      { id: req.user.id, ime: req.user.ime, email: req.user.email, role: req.user.role },
+      { id: req.user.id, ime: req.user.ime, email: req.user.email, role: req.user.role || 'user' },
       process.env.JWT_SECRET,
       { expiresIn: TOKEN_TTL }
     );
@@ -127,7 +135,7 @@ router.post('/refresh', requireAuth, (req, res) => {
   }
 });
 
-// DELETE /api/auth/account  — delete account and all data
+// DELETE /api/auth/account  - delete account and all data
 router.delete('/account', requireAuth, (req, res) => {
   try {
     // Wrap in a transaction so a mid-delete failure can't leave orphaned rows.

@@ -51,7 +51,7 @@ if [ "${HTTP_CODE}" = "000" ]; then
 elif [ "${HTTP_CODE}" != "401" ]; then
   echo "HTTP ${HTTP_CODE} (unexpected)"
   echo
-  echo "WARNING: Got HTTP ${HTTP_CODE} instead of 401 — the stack may not be healthy." >&2
+  echo "WARNING: Got HTTP ${HTTP_CODE} instead of 401 - the stack may not be healthy." >&2
   echo "Continuing anyway, but tests may fail." >&2
 else
   echo "HTTP 401 OK"

@@ -1,11 +1,11 @@
 #!/bin/bash
-# deploy.sh — pull latest changes and restart the stack
+# deploy.sh - pull latest changes and restart the stack
 #
 # Usage:
 #   bash tools/deploy.sh          # normal redeploy (uses Docker cache)
 #   bash tools/deploy.sh --clean  # full rebuild, no cache (after major changes)
 #
-# DB data is in a named Docker volume (sqlite_data) — never touched by this script.
+# DB data is in a named Docker volume (sqlite_data) - never touched by this script.
 
 set -e
 
@@ -17,7 +17,7 @@ for arg in "$@"; do
   [ "$arg" = "--clean" ] && CLEAN=1
 done
 
-echo "==> SSV Stoparica deploy — $(date '+%Y-%m-%d %H:%M:%S')"
+echo "==> SSV Stoparica deploy - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "    Repo: $REPO_DIR"
 [ "$CLEAN" = "1" ] && echo "    Mode: CLEAN REBUILD (no cache)"
 

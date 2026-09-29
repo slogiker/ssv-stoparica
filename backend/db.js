@@ -4,7 +4,7 @@ const fs = require('fs');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'stoparica.db');
 
-// Ensure the parent directory exists — better-sqlite3 throws if it doesn't.
+// Ensure the parent directory exists - better-sqlite3 throws if it doesn't.
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
@@ -13,7 +13,7 @@ const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-// Run migrations — idempotent, safe to call on every startup
+// Run migrations - idempotent, safe to call on every startup
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +52,30 @@ try {
   db.prepare("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'").run();
 } catch (e) {
   // Ignore if column already exists
+}
+
+try {
+  db.prepare("ALTER TABLE devices ADD COLUMN svc_uuid TEXT NOT NULL DEFAULT ''").run();
+} catch (e) {
+  // Ignore if column already exists
+}
+
+try {
+  db.prepare("ALTER TABLE devices ADD COLUMN char_uuid TEXT NOT NULL DEFAULT ''").run();
+} catch (e) {
+  // Ignore if column already exists
+}
+
+try {
+  db.prepare("UPDATE devices SET svc_uuid = uuid WHERE (svc_uuid IS NULL OR svc_uuid = '') AND uuid IS NOT NULL").run();
+} catch (e) {
+  // Ignore if uuid column doesn't exist
+}
+
+try {
+  db.prepare("ALTER TABLE devices DROP COLUMN uuid").run();
+} catch (e) {
+  // Ignore if uuid column does not exist
 }
 
 module.exports = db;

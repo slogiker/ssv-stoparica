@@ -2,7 +2,7 @@
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "=== SSV Stoparica — dev start ==="
+echo "=== SSV Stoparica - dev start ==="
 
 # 1. Backend deps
 cd "$ROOT/backend"

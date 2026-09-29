@@ -11,8 +11,8 @@ const UUID_RE = /^([0-9a-f]{4}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[
 // Body: { svc_uuid, char_uuid, friendly_name }
 router.post('/', (req, res) => {
   const { svc_uuid, char_uuid, friendly_name } = req.body;
-  if (!svc_uuid || !char_uuid) {
-    return res.status(400).json({ napaka: 'Oba UUID-ja (service in characteristic) sta obvezna.' });
+  if (!svc_uuid || !char_uuid || typeof svc_uuid !== 'string' || typeof char_uuid !== 'string') {
+    return res.status(400).json({ napaka: 'Oba UUID-ja (service in characteristic) sta obvezna niza.' });
   }
   if (!UUID_RE.test(svc_uuid) || !UUID_RE.test(char_uuid)) {
     return res.status(400).json({ napaka: 'UUID naprave ni v veljavni obliki.' });
@@ -38,7 +38,7 @@ router.post('/', (req, res) => {
   }
 });
 
-// GET /api/devices  — list saved devices for current user
+// GET /api/devices  - list saved devices for current user
 router.get('/', (req, res) => {
   try {
     const rows = db.prepare(
@@ -50,10 +50,10 @@ router.get('/', (req, res) => {
   }
 });
 
-// DELETE /api/devices/:id  — forget device (must belong to current user)
+// DELETE /api/devices/:id  - forget device (must belong to current user)
 router.delete('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
-  if (!id) return res.status(400).json({ napaka: 'Neveljaven ID naprave.' });
+  if (!id || isNaN(id)) return res.status(400).json({ napaka: 'Neveljaven ID naprave.' });
 
   const device = db.prepare('SELECT id FROM devices WHERE id = ? AND user_id = ?').get(id, req.user.id);
   if (!device) {

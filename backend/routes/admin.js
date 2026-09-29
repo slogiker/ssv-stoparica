@@ -43,11 +43,21 @@ router.get('/users', requireAdmin, (req, res) => {
 });
 
 // POST /api/admin/users/:id/role
-router.post('/users/:id/role', requireAdmin, (req, res) => {
-  const userId = req.params.id;
+router.post('/users/:id/role', (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  if (!userId || isNaN(userId)) {
+    return res.status(400).json({ napaka: 'Neveljaven ID uporabnika.' });
+  }
   const { role } = req.body;
   if (!['admin', 'user'].includes(role)) {
     return res.status(400).json({ napaka: 'Neveljavna vloga.' });
+  }
+  if (userId === req.user.id && role !== 'admin') {
+    return res.status(400).json({ napaka: 'Ne morete odvzeti lastnih administratorskih pravic.' });
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!target) {
+    return res.status(404).json({ napaka: 'Uporabnik ni najden.' });
   }
   try {
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
@@ -58,8 +68,18 @@ router.post('/users/:id/role', requireAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/users/:id
-router.delete('/users/:id', requireAdmin, (req, res) => {
-  const userId = req.params.id;
+router.delete('/users/:id', (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  if (!userId || isNaN(userId)) {
+    return res.status(400).json({ napaka: 'Neveljaven ID uporabnika.' });
+  }
+  if (userId === req.user.id) {
+    return res.status(400).json({ napaka: 'Ne morete izbrisati lastnega računa prek skrbniškega vmesnika.' });
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!target) {
+    return res.status(404).json({ napaka: 'Uporabnik ni najden.' });
+  }
   try {
     db.transaction(() => {
       db.prepare('DELETE FROM runs WHERE user_id = ?').run(userId);
@@ -73,8 +93,11 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
 });
 
 // GET /api/admin/users/:id/runs
-router.get('/users/:id/runs', requireAdmin, (req, res) => {
-  const userId = req.params.id;
+router.get('/users/:id/runs', (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  if (!userId || isNaN(userId)) {
+    return res.status(400).json({ napaka: 'Neveljaven ID uporabnika.' });
+  }
   try {
     const runs = db.prepare('SELECT * FROM runs WHERE user_id = ? ORDER BY datum DESC').all(userId);
     res.json(runs);
@@ -84,8 +107,15 @@ router.get('/users/:id/runs', requireAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/runs/:id
-router.delete('/runs/:id', requireAdmin, (req, res) => {
-  const runId = req.params.id;
+router.delete('/runs/:id', (req, res) => {
+  const runId = parseInt(req.params.id, 10);
+  if (!runId || isNaN(runId)) {
+    return res.status(400).json({ napaka: 'Neveljaven ID teka.' });
+  }
+  const run = db.prepare('SELECT id FROM runs WHERE id = ?').get(runId);
+  if (!run) {
+    return res.status(404).json({ napaka: 'Tek ni najden.' });
+  }
   try {
     db.prepare('DELETE FROM runs WHERE id = ?').run(runId);
     res.json({ ok: true });

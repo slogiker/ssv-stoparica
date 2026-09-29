@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-// Fail fast — without JWT_SECRET every token would be signed with undefined,
+// Fail fast - without JWT_SECRET every token would be signed with undefined,
 // which jsonwebtoken silently coerces to the string "undefined".
 if (!process.env.JWT_SECRET) {
   console.error('[fatal] JWT_SECRET environment variable is not set. Refusing to start.');
@@ -23,19 +23,20 @@ const PORT = process.env.PORT || 4827;
 app.set('trust proxy', 1);
 
 // CORS: allow only the production origin (or any origin in local dev).
-// In production this runs behind nginx on the same origin — CORS headers
+// In production this runs behind nginx on the same origin - CORS headers
 // are only relevant if the API is ever called cross-origin (e.g. mobile app).
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 app.use(cors(CORS_ORIGIN === '*' ? undefined : { origin: CORS_ORIGIN }));
 
-// Limit request body to 10 kB — these endpoints have very small payloads.
+// Limit request body to 10 kB - these endpoints have very small payloads.
 app.use(express.json({ limit: '10kb' }));
 
-// Rate-limit auth endpoints: 10 attempts per IP per 5-minute window.
+// Rate-limit auth endpoints: configurable, default 30 attempts per IP per 5-minute window.
 // Prevents brute-force against login and registration spam.
+const authMax = parseInt(process.env.AUTH_RATE_LIMIT_MAX, 10) || 30;
 const authLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 10,
+  max: authMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: { napaka: 'Preveč poskusov. Počakajte 5 minut in poskusite znova.' },
@@ -50,7 +51,7 @@ app.use('/api/runs', requireAuth, runsRoutes);
 app.use('/api/devices', requireAuth, devicesRoutes);
 app.use('/api/admin', requireAdmin, adminRoutes);
 
-// Global error handler — always returns JSON (must be last app.use)
+// Global error handler - always returns JSON (must be last app.use)
 app.use((err, req, res, next) => {
   console.error(err);
   const status = err.type === 'entity.parse.failed' ? 400 : (err.status || err.statusCode || 500);

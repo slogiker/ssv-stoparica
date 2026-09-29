@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dev proxy — serves frontend static files and forwards /api/* to backend on port 3000.
+Dev proxy - serves frontend static files and forwards /api/* to backend on port 3000.
 Usage: python3 dev-proxy.py [port]
 """
 import os, sys, shutil

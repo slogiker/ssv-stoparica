@@ -9,10 +9,10 @@ function requireAuth(req, res, next) {
   const token = header.slice(7);
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    // Confirm user still exists (handles deleted accounts)
-    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(payload.id);
+    // Confirm user still exists and get latest role/data from database
+    const user = db.prepare('SELECT id, ime, email, role FROM users WHERE id = ?').get(payload.id);
     if (!user) return res.status(401).json({ napaka: 'Seja je potekla. Prosimo, prijavite se znova.' });
-    req.user = payload;
+    req.user = user;
     next();
   } catch {
     return res.status(401).json({ napaka: 'Seja je potekla. Prosimo, prijavite se znova.' });
@@ -20,13 +20,18 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  requireAuth(req, res, () => {
-    const isAdmin = req.user && req.user.role === 'admin';
-    if (!isAdmin) {
-      return res.status(403).json({ napaka: 'Dostop zavrnjen. Niste administrator.' });
+  const checkAdmin = () => {
+    if (req.user && req.user.role === 'admin') {
+      return next();
     }
-    next();
-  });
+    return res.status(403).json({ napaka: 'Dostop zavrnjen. Niste administrator.' });
+  };
+
+  if (req.user) {
+    checkAdmin();
+  } else {
+    requireAuth(req, res, checkAdmin);
+  }
 }
 
 module.exports = { requireAuth, requireAdmin };

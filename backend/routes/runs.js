@@ -52,7 +52,7 @@ router.get('/', (req, res) => {
 // Body: { ekipa, disciplina, cas_s }
 router.post('/', (req, res) => {
   const { ekipa, disciplina, cas_s } = req.body;
-  if (!cas_s || typeof cas_s !== 'number' || cas_s <= 0) {
+  if (typeof cas_s !== 'number' || !Number.isFinite(cas_s) || cas_s <= 0 || cas_s > 86400) {
     return res.status(400).json({ napaka: 'Neveljaven čas.' });
   }
   if (disciplina && !['zimska', 'letna'].includes(disciplina)) {
@@ -72,7 +72,7 @@ router.post('/', (req, res) => {
   }
 });
 
-// GET /api/runs/pr  — lowest cas_s for current user
+// GET /api/runs/pr  - lowest cas_s for current user
 // Must be defined before /:id if ever added
 router.get('/pr', (req, res) => {
   try {
@@ -85,7 +85,7 @@ router.get('/pr', (req, res) => {
   }
 });
 
-// GET /api/runs/export  — CSV download
+// GET /api/runs/export  - CSV download
 router.get('/export', (req, res) => {
   try {
     const rows = db.prepare(
