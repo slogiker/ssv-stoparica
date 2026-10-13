@@ -41,43 +41,74 @@ let pr = null;
 
 // ── API HELPERS ──
 const API = '/api';
+const _TRANSIENT_MSG = 'Strežnik ni dosegljiv. Poskusite znova.';
+
 function _assertJson(r) {
   const ct = r.headers.get('content-type') || '';
   if (!ct.startsWith('application/json'))
-    throw new Error('Strežnik ni dosegljiv. Poskusite znova.');
+    throw new Error(_TRANSIENT_MSG);
 }
 async function _safeJson(r) {
   _assertJson(r);
   try { return await r.json(); }
-  catch { throw new Error('Strežnik ni dosegljiv. Poskusite znova.'); }
+  catch { throw new Error(_TRANSIENT_MSG); }
 }
+
+// Retry wrapper: silently retries on transient connectivity errors
+// (non-JSON responses from proxy, network failures) before surfacing to user.
+async function _withRetry(fn, retries = 2, delayMs = 3000) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const isTransient = e.message === _TRANSIENT_MSG
+                       || e.name === 'TypeError'      // network error (fetch threw)
+                       || e.message === 'Failed to fetch';
+      if (isTransient && attempt < retries) {
+        console.warn(`[api] Transient error, retry ${attempt + 1}/${retries} in ${delayMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 async function apiPost(path, body) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
-  const r = await fetch(API + path, { method: 'POST', headers, body: JSON.stringify(body) });
-  const data = await _safeJson(r);
-  if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
-  return data;
+  return _withRetry(async () => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    const r = await fetch(API + path, { method: 'POST', headers, body: JSON.stringify(body) });
+    const data = await _safeJson(r);
+    if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
+    return data;
+  });
 }
 async function apiGet(path) {
-  const r = await fetch(API + path, { headers: { 'Authorization': 'Bearer ' + authToken } });
-  const data = await _safeJson(r);
-  if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
-  return data;
+  return _withRetry(async () => {
+    const r = await fetch(API + path, { headers: { 'Authorization': 'Bearer ' + authToken } });
+    const data = await _safeJson(r);
+    if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
+    return data;
+  });
 }
 async function apiDelete(path) {
-  const r = await fetch(API + path, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + authToken } });
-  if (r.status === 204) return;
-  const data = await _safeJson(r);
-  if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
+  return _withRetry(async () => {
+    const r = await fetch(API + path, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + authToken } });
+    if (r.status === 204) return;
+    const data = await _safeJson(r);
+    if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
+  });
 }
 async function apiPut(path, body) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
-  const r = await fetch(API + path, { method: 'PUT', headers, body: JSON.stringify(body) });
-  const data = await _safeJson(r);
-  if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
-  return data;
+  return _withRetry(async () => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    const r = await fetch(API + path, { method: 'PUT', headers, body: JSON.stringify(body) });
+    const data = await _safeJson(r);
+    if (!r.ok) throw new Error(data.napaka || 'Napaka strežnika.');
+    return data;
+  });
 }
 
 
@@ -306,7 +337,7 @@ function startTimerActual() {
   requestWakeLock();
 }
 
-function handleStop(triggeredBy) {
+function handleStop(triggeredBy, stopTimestamp) {
   if (soundPlaying) {
     console.log('STOPWATCH: Stop request during audio preparation. Cancelling audio.');
     cancelAudio();
@@ -314,7 +345,8 @@ function handleStop(triggeredBy) {
   }
   if (!isRunning) return;
   cancelAnimationFrame(rafId); isRunning = false;
-  elapsed = Date.now() - startTime; setDisplay(elapsed, 'stopped');
+  const nowTime = (typeof stopTimestamp === 'number' && stopTimestamp > 0) ? stopTimestamp : Date.now();
+  elapsed = Math.max(0, nowTime - startTime); setDisplay(elapsed, 'stopped');
   console.log('STOPWATCH: Timing stopped by ' + (triggeredBy || 'UI') + '. Final elapsed:', elapsed, 'ms (' + fmtFull(elapsed) + ')');
   vibrate([60, 40, 100]);
   document.getElementById('timerLabel').textContent = 'USTAVLJENO';
@@ -375,6 +407,7 @@ function saveRun() {
         q.push({ ekipa, disciplina: discipline, cas_s, _localId: entry.id });
         safeStorage.local.set('ssv_offline_queue', JSON.stringify(q));
         showToast('Ni povezave - vnos shranjen lokalno.');
+        scheduleFlushOfflineQueue(5000);
       });
   }
 
@@ -652,14 +685,23 @@ function onBleVal(e) {
     console.log('BLE: Characteristic value changed, but payload is empty (0 bytes).');
     return;
   }
-  const rawVal = Array.from(new Uint8Array(e.target.value.buffer));
+  const dataView = e.target.value;
+  const rawVal = Array.from(new Uint8Array(dataView.buffer));
+  const opcode = dataView.getUint8(0);
   console.log('BLE: Characteristic value changed. Payload:', rawVal);
-  if (e.target.value.getUint8(0) === 0x01) {
+  if (opcode === 0x01) {
     if (isRunning) {
-      console.log('BLE: Stop signal (0x01) received while running. Stopping stopwatch.');
-      handleStop('BLE');
+      let stopTimestamp = Date.now();
+      if (dataView.byteLength >= 3) {
+        const latencyMs = (dataView.getUint8(1) << 8) | dataView.getUint8(2);
+        stopTimestamp -= latencyMs;
+        console.log(`BLE: Stop signal (0x01) received with ${latencyMs}ms hardware latency compensation. Stopping stopwatch.`);
+      } else {
+        console.log('BLE: Stop signal (0x01) received without latency offset. Stopping stopwatch.');
+      }
+      handleStop('BLE', stopTimestamp);
     } else {
-      console.log('BLE: Stop signal (0x01) received, but stopwatch is not running.');
+      console.log('BLE: Stop signal (0x01) received, but stopwatch is not running (redundant burst or late packet ignored).');
     }
   }
 }
@@ -1209,6 +1251,15 @@ function doLogout() {
   showToast('Odjavljeni ste.');
 }
 
+let _offlineQueueTimer = null;
+function scheduleFlushOfflineQueue(delayMs = 10000) {
+  if (_offlineQueueTimer) return;
+  _offlineQueueTimer = setTimeout(async () => {
+    _offlineQueueTimer = null;
+    await flushOfflineQueue();
+  }, delayMs);
+}
+
 async function flushOfflineQueue() {
   if (!authToken) return;
   const raw = safeStorage.local.get('ssv_offline_queue');
@@ -1226,8 +1277,10 @@ async function flushOfflineQueue() {
   }
   if (failed.length) {
     safeStorage.local.set('ssv_offline_queue', JSON.stringify(failed));
+    scheduleFlushOfflineQueue(20000);
   } else {
     safeStorage.local.remove('ssv_offline_queue');
+    if (_offlineQueueTimer) { clearTimeout(_offlineQueueTimer); _offlineQueueTimer = null; }
     showToast('Lokalni vnosi sinhronizirani.');
     syncRunsFromServer();
   }
@@ -1334,10 +1387,12 @@ function updateAuthUI() {
   }
 }
 
+let _syncRunsRetryTimer = null;
 async function syncRunsFromServer() {
   if (!authToken) return;
   try {
     const runs = await apiGet('/runs');
+    if (_syncRunsRetryTimer) { clearTimeout(_syncRunsRetryTimer); _syncRunsRetryTimer = null; }
     history = runs.map((r, i) => {
       const iso = r.datum.replace(' ', 'T');
       return {
@@ -1363,14 +1418,22 @@ async function syncRunsFromServer() {
       document.getElementById('lastStrip').style.opacity = '1';
     }
   } catch (e) {
-    console.error('Runs sync failed:', e);
-    // Only show toast for genuine server errors, not transient network/fetch blips (like DevTools hard reloads)
-    const isNetworkError = e instanceof TypeError || 
-                           e.message === 'Failed to fetch' || 
-                           e.message.includes('NetworkError') || 
-                           e.message.includes('Load failed');
-    if (navigator.onLine !== false && !isNetworkError) {
+    console.warn('Runs sync paused/failed:', e.message);
+    const isTransient = e.message === _TRANSIENT_MSG ||
+                        e instanceof TypeError || 
+                        e.message === 'Failed to fetch' || 
+                        e.message.includes('NetworkError') || 
+                        e.message.includes('Load failed');
+    // Only show toast if we have NO cached runs at all and it is a genuine network/server failure
+    if (!isTransient && (!history || history.length === 0) && navigator.onLine !== false) {
       showToast('Napaka pri sinhronizaciji rezultatov.');
+    }
+    // Self-heal: retry silently in background after 15 seconds
+    if (!_syncRunsRetryTimer) {
+      _syncRunsRetryTimer = setTimeout(() => {
+        _syncRunsRetryTimer = null;
+        if (authToken) syncRunsFromServer();
+      }, 15000);
     }
   }
 }

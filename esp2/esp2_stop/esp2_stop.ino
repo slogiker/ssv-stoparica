@@ -41,10 +41,18 @@ BLEAdvertising*    pAdvertising    = nullptr;
 volatile bool deviceConnected  = false;
 volatile bool pendingReconnect = false;   // set in callback, handled in loop() to avoid BLE stack re-entry
 static   uint32_t reconnectAt  = 0;       // millis() timestamp when re-advertise should fire (Phase 2)
-static   uint32_t lockoutUntil = 0;       // lockout window to prevent button bounce double-triggers
+static   uint32_t lockoutUntil = 0;       // minimal lockout window to prevent bounce
 static   uint32_t lastActiveTime = 0;     // auto deep sleep on connection inactivity
 #define  ENABLE_DEEP_SLEEP false          // disabled by default because physical power switch is used
 #define  SLEEP_TIMEOUT_MS  600000         // 10 minutes before entering deep sleep (if enabled)
+
+// Burst transmission and hardware latency compensation (eliminates ping and guarantees delivery)
+static   uint32_t pressTimestamp  = 0;    // exact millis() timestamp of physical button press
+static   uint8_t  burstRemaining  = 0;    // remaining packets to send in burst
+static   uint32_t nextBurstTime   = 0;    // millis() timestamp for next burst packet
+#define  BURST_COUNT       5              // 5 redundant packets per press
+#define  BURST_INTERVAL_MS 15             // 15ms spacing between burst packets
+#define  LOCKOUT_MS        150            // Short 150ms lockout (prevents release bounce, allows fast retry)
 
 // Software button debounce
 bool     btnRaw        = HIGH;
@@ -224,7 +232,28 @@ void loop() {
   // Update LED effects (breathing, heartbeat, or strobe)
   updateLed();
 
-  // Button: software debounce - detect HIGH→LOW edge only
+  // Burst transmission handler (non-blocking redundant packets with precise latency offset)
+  if (burstRemaining > 0 && now >= nextBurstTime) {
+    if (deviceConnected) {
+      uint16_t latencyMs = (uint16_t)(now - pressTimestamp);
+      uint8_t payload[3] = {
+        0x01,
+        (uint8_t)((latencyMs >> 8) & 0xFF),
+        (uint8_t)(latencyMs & 0xFF)
+      };
+      pCharacteristic->setValue(payload, 3);
+      pCharacteristic->notify();
+      Serial.print("[SSV] Burst stop signal sent (packet remaining: ");
+      Serial.print(burstRemaining - 1);
+      Serial.print(", latency offset: ");
+      Serial.print(latencyMs);
+      Serial.println(" ms)");
+    }
+    burstRemaining--;
+    nextBurstTime = now + BURST_INTERVAL_MS;
+  }
+
+  // Button: software debounce - detect HIGH to LOW edge only
   bool raw = digitalRead(BTN_PIN);
   if (raw != btnRaw) {
     btnRaw        = raw;
@@ -234,15 +263,13 @@ void loop() {
     btnStable = btnRaw;
     if (btnStable == LOW) {
       if (now >= lockoutUntil) {
-        lockoutUntil = now + 1000; // 1-second lockout window to prevent false double-clicks
-        lastActiveTime = now;      // reset sleep inactivity timer on user activity
+        lockoutUntil   = now + LOCKOUT_MS; // Short 150ms lockout (prevents release bounce, allows fast retry)
+        lastActiveTime = now;
+        pressTimestamp = now;              // Exact moment button was physically pressed
+        burstRemaining = BURST_COUNT;      // Trigger 5 redundant burst packets
+        nextBurstTime  = now;              // Send first packet immediately
         setLedMode(LED_MODE_PRESSED);
-        if (deviceConnected) {
-          uint8_t val = 0x01;
-          pCharacteristic->setValue(&val, 1);
-          pCharacteristic->notify();
-          Serial.println("[SSV] Stop signal sent (0x01)");
-        } else {
+        if (!deviceConnected) {
           Serial.println("[SSV] Button pressed (offline diagnostic)");
         }
       }
