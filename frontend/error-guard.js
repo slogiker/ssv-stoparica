@@ -138,6 +138,11 @@
       }
     }
 
+    if (res && res.ok && missedChecks > 0) {
+      missedChecks = 0;
+      hideBanner();
+    }
+
     return res;
   };
 
@@ -151,7 +156,7 @@
     
     const tryCheck = async () => {
       try {
-        const r = await _fetch('/api/health');
+        const r = await _fetch('/api/health', { cache: 'no-store' });
         return r.ok;
       } catch {
         return false;
@@ -183,20 +188,16 @@
   }
 
   window.startWatchdog = function () {
-    // Immediate check on startup: no need to wait 60s to discover server is down
+    // Check once on startup
     _healthCheck(false);
-    setInterval(() => _healthCheck(true), 60000);
 
-    // When tab becomes visible: reset hidden flag and recheck immediately.
-    // If server is up, any accumulated misses from background throttling are cleared.
+    // When tab becomes visible: reset hidden flag and recheck
     document.addEventListener('visibilitychange', async () => {
       if (document.hidden) { _tabWasHidden = true; return; }
       _tabWasHidden = false;
       try {
-        const r = await _fetch('/api/health');
+        const r = await _fetch('/api/health', { cache: 'no-store' });
         if (r.ok) { missedChecks = 0; hideBanner(); }
-        // On failure here: don't increment - we just came back from hidden,
-        // could be momentary network reattach. Let the regular interval handle it.
       } catch {}
     });
 

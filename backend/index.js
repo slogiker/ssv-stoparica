@@ -44,7 +44,10 @@ const authLimiter = rateLimit({
 app.use('/api/auth/login',    authLimiter);
 app.use('/api/auth/register', authLimiter);
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/health', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.json({ ok: true });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/runs', requireAuth, runsRoutes);

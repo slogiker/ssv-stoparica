@@ -12,8 +12,8 @@ let pripravaOn = localStorage.getItem('ssv_priprava') === '1';
 let _pripravaRaf = null, _pripravaEnd = null, lastSpokenSec = null;
 
 // ── SIGNAL STRENGTH / DISTANCE ──
-// TX Power at 1 m: must match #define TX_POWER_AT_1M in ESP firmware (-59 dBm)
-const BLE_TX_POWER_AT_1M = -59;
+// TX Power at 1 m: calibrated for +6 dBm ESP32 TX power (-53 dBm)
+const BLE_TX_POWER_AT_1M = -53;
 // Path-loss exponent n. 2.0 = ideal free space; 2.5–3.0 better for indoor use.
 const BLE_PATH_LOSS_N = 2.5;
 // Exponential Moving Average alpha: 0.15 = heavy smoothing, 0.4 = more responsive
@@ -874,7 +874,7 @@ async function startRssiWatch() {
   const distEl = document.getElementById('signalDist');
   if (distEl) { distEl.textContent = 'OK'; distEl.className = 'signal-dist near'; }
   const dbmEl = document.getElementById('signalDbm');
-  if (dbmEl) dbmEl.textContent = 'Connected';
+  if (dbmEl) dbmEl.textContent = '';
 
   if (!bleDevice || typeof bleDevice.watchAdvertisements !== 'function') {
     console.log('BLE RSSI: watchAdvertisements not supported on this platform/browser.');

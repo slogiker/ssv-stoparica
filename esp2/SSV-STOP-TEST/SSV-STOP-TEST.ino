@@ -168,10 +168,10 @@ void setup() {
 
   BLEDevice::init(DEVICE_NAME);
 
-  // Set TX power to 0 dBm - consistent, documented reference point for distance math.
+  // Set TX power to +6 dBm (4x power boost over 0 dBm) - rock-solid RF margin in noisy gymnasiums.
   // ESP32 supports: -12, -9, -6, -3, 0, 3, 6, 9 dBm via ESP_PWR_LVL_* constants.
-  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_N0);   // 0 dBm advertising
-  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_N0); // 0 dBm GATT
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P6);   // +6 dBm advertising
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P6); // +6 dBm GATT
 
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new ServerCallbacks());

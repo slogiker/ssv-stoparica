@@ -1,0 +1,280 @@
+// SSV Stoparica - ESP2 stop button
+// Target: ESP32 WROOM-32U (external antenna)
+//
+// UUIDs and device name are replaced by tools/gen_esp.py when provisioning.
+// Do NOT flash this template directly - run gen_esp.py first.
+//
+// Wiring:
+//   GPIO 0  - stop button (to GND, INPUT_PULLUP)
+//   GPIO 2  - onboard LED (status indicator)
+
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+#include <esp_bt.h>          // esp_ble_tx_power_set()
+#include <BLEBeacon.h>
+#include <esp_gap_ble_api.h> // esp_ble_gap_update_conn_params() for supervision timeout
+
+// SERVICE_UUID is unique per device - replaced by gen_esp.py
+// CHARACTERISTIC_UUID is unique per device - both UUIDs are replaced by gen_esp.py at provisioning time
+#define SERVICE_UUID        "df90fcc1-74f8-4353-a3e2-a49c897ac26f"
+#define CHARACTERISTIC_UUID "24d8330c-203b-4ef5-98a2-41fe089c509b"
+#define DEVICE_NAME         "SSV-STOP-Hamercani"
+
+#define BTN_PIN     0    // stop button - press pulls LOW (INPUT_PULLUP)
+#define LED_PIN     2    // button built-in LED (GPIO 2)
+
+// LED wiring polarity:
+// Set to true if LED anode is on GPIO 2 (Active-HIGH)
+// Set to false if LED cathode is on GPIO 2 (Active-LOW)
+#define LED_ACTIVE_HIGH true
+
+// Press feedback effect duration
+#define PRESS_EFFECT_MS 500
+
+BLEServer*         pServer         = nullptr;
+BLECharacteristic* pCharacteristic = nullptr;
+BLEAdvertising*    pAdvertising    = nullptr;
+
+// volatile: written from BLE callback task, read from loop() - prevents compiler register-caching
+volatile bool deviceConnected  = false;
+volatile bool pendingReconnect = false;   // set in callback, handled in loop() to avoid BLE stack re-entry
+static   uint32_t reconnectAt  = 0;       // millis() timestamp when re-advertise should fire (Phase 2)
+static   uint32_t lockoutUntil = 0;       // minimal lockout window to prevent bounce
+static   uint32_t lastActiveTime = 0;     // auto deep sleep on connection inactivity
+#define  ENABLE_DEEP_SLEEP false          // disabled by default because physical power switch is used
+#define  SLEEP_TIMEOUT_MS  600000         // 10 minutes before entering deep sleep (if enabled)
+
+// Burst transmission and hardware latency compensation (eliminates ping and guarantees delivery)
+static   uint32_t pressTimestamp  = 0;    // exact millis() timestamp of physical button press
+static   uint8_t  burstRemaining  = 0;    // remaining packets to send in burst
+static   uint32_t nextBurstTime   = 0;    // millis() timestamp for next burst packet
+#define  BURST_COUNT       5              // 5 redundant packets per press
+#define  BURST_INTERVAL_MS 15             // 15ms spacing between burst packets
+#define  LOCKOUT_MS        150            // Short 150ms lockout (prevents release bounce, allows fast retry)
+
+// Software button debounce
+bool     btnRaw        = HIGH;
+bool     btnStable     = HIGH;
+uint32_t debounceStart = 0;
+#define  DEBOUNCE_MS   30
+
+// LED juice effects (heartbeat advertising, breathing ready, strobe on press)
+enum LedMode {
+  LED_MODE_ADVERTISING,
+  LED_MODE_CONNECTED,
+  LED_MODE_PRESSED
+};
+
+LedMode  currentLedMode   = LED_MODE_ADVERTISING;
+uint32_t pressEffectStart = 0;
+
+void setLedBrightness(uint8_t duty) {
+  if (LED_ACTIVE_HIGH) {
+    analogWrite(LED_PIN, duty);
+  } else {
+    analogWrite(LED_PIN, 255 - duty);
+  }
+}
+
+void setLedMode(LedMode mode) {
+  currentLedMode = mode;
+  if (mode == LED_MODE_PRESSED) {
+    pressEffectStart = millis();
+  }
+}
+
+void updateLed() {
+  uint32_t now = millis();
+
+  // 1. Solid feedback when button is pressed
+  if (currentLedMode == LED_MODE_PRESSED) {
+    uint32_t elapsed = now - pressEffectStart;
+    if (elapsed < PRESS_EFFECT_MS) {
+      setLedBrightness(255);
+      return;
+    } else {
+      // Revert to correct state based on current connection
+      if (deviceConnected) {
+        setLedMode(LED_MODE_CONNECTED);
+      } else {
+        setLedMode(LED_MODE_ADVERTISING);
+      }
+    }
+  }
+
+  // 2. Normal operational patterns
+  if (currentLedMode == LED_MODE_CONNECTED) {
+    // Breathing pattern: 2-second period
+    float angle = (2 * PI * (now % 2000)) / 2000.0;
+    // Map sine wave [-1, 1] to [15, 255] (low end stays slightly glowing)
+    uint8_t brightness = 15 + 120 * (sin(angle) + 1.0);
+    setLedBrightness(brightness);
+  } 
+  else if (currentLedMode == LED_MODE_ADVERTISING) {
+    // Heartbeat double-blink pattern: 1-second period
+    uint32_t cycleTime = now % 1000;
+    if (cycleTime < 100) {
+      setLedBrightness(255); // 1st pulse
+    } else if (cycleTime < 200) {
+      setLedBrightness(0);
+    } else if (cycleTime < 300) {
+      setLedBrightness(255); // 2nd pulse
+    } else {
+      setLedBrightness(0);   // pause
+    }
+  }
+}
+
+// ── BLE callbacks ────────────────────────────────────────────────────────────
+class ServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* s, esp_ble_gatts_cb_param_t* param) override {
+    deviceConnected  = true;
+    pendingReconnect = false;
+    reconnectAt      = 0;
+    setLedMode(LED_MODE_CONNECTED);
+    Serial.println("[BLE] Connected");
+    // Phase 2: increase supervision timeout to 6 s (600 × 10 ms).
+    // Default ~720 ms is too aggressive for gymnasium RF environments -
+    // brief interference causes false disconnects. 6 s gives the link
+    // time to recover without dropping.
+    esp_ble_conn_update_params_t params = {};
+    memcpy(params.bda, param->connect.remote_bda, 6);
+    params.latency  = 0;
+    params.max_int  = 0x12;  // 22.5 ms
+    params.min_int  = 0x06;  // 7.5 ms
+    params.timeout  = 600;   // 6000 ms supervision timeout (units of 10 ms)
+    esp_ble_gap_update_conn_params(&params);
+  }
+  void onDisconnect(BLEServer*) override {
+    deviceConnected  = false;
+    pendingReconnect = true;       // restart advertising safely from loop()
+    Serial.println("[BLE] Disconnected - will re-advertise");
+  }
+};
+
+// ── Setup ────────────────────────────────────────────────────────────────────
+void setup() {
+  setCpuFrequencyMhz(80); // Lower clock frequency to 80MHz to save ~50% battery
+  Serial.begin(115200);
+
+  // LED on immediately - power indicator
+  pinMode(LED_PIN, OUTPUT);
+  setLedBrightness(255);
+
+  pinMode(BTN_PIN, INPUT_PULLUP);
+  lastActiveTime = millis();
+
+  BLEDevice::init(DEVICE_NAME);
+
+  // Set TX power to +6 dBm (4x power boost over 0 dBm) - rock-solid RF margin in noisy gymnasiums.
+  // ESP32 supports: -12, -9, -6, -3, 0, 3, 6, 9 dBm via ESP_PWR_LVL_* constants.
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P6);   // +6 dBm advertising
+  esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P6); // +6 dBm GATT
+
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new ServerCallbacks());
+
+  BLEService* pService = pServer->createService(SERVICE_UUID);
+  pCharacteristic = pService->createCharacteristic(
+    CHARACTERISTIC_UUID,
+    BLECharacteristic::PROPERTY_NOTIFY |
+    BLECharacteristic::PROPERTY_READ |
+    BLECharacteristic::PROPERTY_WRITE
+  );
+  pCharacteristic->addDescriptor(new BLE2902());
+  pService->start();
+
+  pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  // Preferred connection intervals - helps iOS/Android stability
+  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMaxPreferred(0x12);
+
+  BLEAdvertisementData scanResp;
+  scanResp.setName(DEVICE_NAME);
+  pAdvertising->setScanResponseData(scanResp);
+
+  pAdvertising->start();
+
+  Serial.println("[SSV] " DEVICE_NAME " ready - advertising");
+}
+
+// ── Loop ─────────────────────────────────────────────────────────────────────
+void loop() {
+  uint32_t now = millis();
+
+  if (deviceConnected) {
+    lastActiveTime = now;
+  } else if (ENABLE_DEEP_SLEEP && (now - lastActiveTime >= SLEEP_TIMEOUT_MS)) {
+    Serial.println("[SYSTEM] Inactivity timeout. Entering deep sleep...");
+    setLedBrightness(0); // Turn off LED
+    // Wake up on BTN_PIN (GPIO 0) going LOW (0)
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN_PIN, 0);
+    esp_deep_sleep_start();
+  }
+
+  // Phase 2: non-blocking reconnect - schedule re-advertise 200ms from now instead of
+  // blocking with delay(200). This keeps loop() running so button presses are not missed.
+  if (pendingReconnect && reconnectAt == 0) {
+    reconnectAt = millis() + 200;  // schedule for 200ms from now
+  }
+  if (reconnectAt > 0 && millis() >= reconnectAt) {
+    pendingReconnect = false;
+    reconnectAt = 0;
+    pAdvertising->start();
+    setLedMode(LED_MODE_ADVERTISING);
+    Serial.println("[BLE] Re-advertising...");
+  }
+
+  // Update LED effects (breathing, heartbeat, or strobe)
+  updateLed();
+
+  // Burst transmission handler (non-blocking redundant packets with precise latency offset)
+  if (burstRemaining > 0 && now >= nextBurstTime) {
+    if (deviceConnected) {
+      uint16_t latencyMs = (uint16_t)(now - pressTimestamp);
+      uint8_t payload[3] = {
+        0x01,
+        (uint8_t)((latencyMs >> 8) & 0xFF),
+        (uint8_t)(latencyMs & 0xFF)
+      };
+      pCharacteristic->setValue(payload, 3);
+      pCharacteristic->notify();
+      Serial.print("[SSV] Burst stop signal sent (packet remaining: ");
+      Serial.print(burstRemaining - 1);
+      Serial.print(", latency offset: ");
+      Serial.print(latencyMs);
+      Serial.println(" ms)");
+    }
+    burstRemaining--;
+    nextBurstTime = now + BURST_INTERVAL_MS;
+  }
+
+  // Button: software debounce - detect HIGH to LOW edge only
+  bool raw = digitalRead(BTN_PIN);
+  if (raw != btnRaw) {
+    btnRaw        = raw;
+    debounceStart = now;
+  }
+  if ((now - debounceStart) >= DEBOUNCE_MS && btnRaw != btnStable) {
+    btnStable = btnRaw;
+    if (btnStable == LOW) {
+      if (now >= lockoutUntil) {
+        lockoutUntil   = now + LOCKOUT_MS; // Short 150ms lockout (prevents release bounce, allows fast retry)
+        lastActiveTime = now;
+        pressTimestamp = now;              // Exact moment button was physically pressed
+        burstRemaining = BURST_COUNT;      // Trigger 5 redundant burst packets
+        nextBurstTime  = now;              // Send first packet immediately
+        setLedMode(LED_MODE_PRESSED);
+        if (!deviceConnected) {
+          Serial.println("[SSV] Button pressed (offline diagnostic)");
+        }
+      }
+    }
+  }
+
+  delay(5);   // ~200 Hz loop - responsive debounce, low CPU load
+}

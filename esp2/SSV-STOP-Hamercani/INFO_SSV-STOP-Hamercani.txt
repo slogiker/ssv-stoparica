@@ -1,0 +1,39 @@
+SSV Stoparica - Device Info
+============================================================
+
+Device name      : SSV-STOP-Hamercani
+Service UUID     : df90fcc1-74f8-4353-a3e2-a49c897ac26f
+Characteristic   : 24d8330c-203b-4ef5-98a2-41fe089c509b
+
+QR URL           : https://ssv.slogiker.si/?device=df90fcc1-74f8-4353-a3e2-a49c897ac26f&char=24d8330c-203b-4ef5-98a2-41fe089c509b
+
+────────────────────────────────────────────────────────────
+Files in this folder
+  SSV-STOP-Hamercani.ino        - flash to ESP32 (Arduino IDE / esptool)
+  qr_SSV-STOP-Hamercani.png     - print & stick on the stop box
+  INFO_SSV-STOP-Hamercani.txt   - this file
+
+────────────────────────────────────────────────────────────
+How it works
+  1. Flash SSV-STOP-Hamercani.ino to the ESP32
+  2. Print qr_SSV-STOP-Hamercani.png and stick it on the box
+  3. User scans QR with Chrome on Android
+     → opens ssv.slogiker.si/?device=...&char=...
+  4. App reads both UUIDs from the URL,
+     auto-scans for SSV-STOP-Hamercani and connects via BLE
+  5. Pressing the button sends 0x01 notify → app stops timer
+
+────────────────────────────────────────────────────────────
+Wiring
+  GPIO 0  - stop button (to GND, INPUT_PULLUP)
+  GPIO 2  - onboard LED
+             Blink 1Hz = advertising (waiting for phone)
+             Solid ON  = phone connected
+
+────────────────────────────────────────────────────────────
+Troubleshooting
+  - BLE not working? Make sure you use Chrome on Android
+  - Wrong device connecting? Check the ?device= UUID matches
+  - Lost this file? UUIDs are also in SSV-STOP-Hamercani.ino (#define lines)
+  - Need a new QR? Re-run:  python3 tools/gen_esp.py --name Hamercani
+    (same name → same folder will be overwritten with fresh QR)

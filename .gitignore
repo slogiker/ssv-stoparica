@@ -39,6 +39,8 @@ current-state.png
 .claude/
 venv/
 
+# Local hardware reference (not pushed)
+HARDWARE-REFERENCE.md
+
 # Voice testing tool (local only)
 /frontend/voice-tester.html
-
