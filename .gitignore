@@ -34,6 +34,7 @@ desktop.ini
 # Temp / screenshots
 current-state.png
 /tmp/
+temp/
 
 # Claude internals
 .claude/
@@ -43,4 +44,4 @@ venv/
 HARDWARE-REFERENCE.md
 
 # Voice testing tool (local only)
-/frontend/voice-tester.html
+/frontend/voice-tester.*
