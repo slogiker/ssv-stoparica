@@ -10,6 +10,7 @@ const MAX_RECONNECT_ATTEMPTS = 5;
 // BLE confirm dialog helpers
 function bleConfirmResolve(v) {
   if (v) {
+    if (typeof unlockAudio === 'function') unlockAudio();
     const cb = document.getElementById('bleNoShow');
     if (cb && cb.checked) localStorage.setItem('ssv_ble_noshow', '1');
   }

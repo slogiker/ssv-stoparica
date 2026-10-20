@@ -6,38 +6,101 @@ function tick() {
   rafId = requestAnimationFrame(tick);
 }
 
-// ── PREPARATION TONE / BEEP (Web Audio API - 600 Hz square wave, 0.6s) ──
-function playPrepTone(freq = 600, dur = 0.6) {
-  try {
+// ── AUDIO CONTEXT & UNLOCK (Web Audio API & HTML5 Audio) ──
+let _audioCtx = null;
+function getAudioContext() {
+  if (!_audioCtx) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioContextClass();
-    const osc = ctx.createOscillator();
+    if (AudioContextClass) _audioCtx = new AudioContextClass();
+  }
+  if (_audioCtx && _audioCtx.state === 'suspended') {
+    _audioCtx.resume().catch(() => { });
+  }
+  return _audioCtx;
+}
+
+// Pre-unlock audio resources synchronously inside user click event to disarm mobile autoplay blockers
+function unlockAudio() {
+  getAudioContext();
+
+  if (soundOn) {
+    try {
+      if (!_audioEl) {
+        _audioEl = new Audio(discipline === 'zimska' ? AUDIO_ZIMSKA : AUDIO_LETNA);
+      } else {
+        _audioEl.src = discipline === 'zimska' ? AUDIO_ZIMSKA : AUDIO_LETNA;
+      }
+      _audioEl.load();
+      const p = _audioEl.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          _audioEl.pause();
+          _audioEl.currentTime = 0;
+        }).catch(() => { });
+      }
+    } catch (e) { }
+  }
+
+  if ('speechSynthesis' in window) {
+    try {
+      const primer = new SpeechSynthesisUtterance(' ');
+      primer.volume = 0.01;
+      window.speechSynthesis.speak(primer);
+    } catch (e) { }
+  }
+}
+
+// Pre-cache voices when available
+if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.onvoiceschanged !== undefined) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    try { window.speechSynthesis.getVoices(); } catch (e) { }
+  };
+}
+
+// ── LOUD PREPARATION TONE / BUZZER (Dual-oscillator sports horn tone) ──
+function playLoudPrepTone(freq = 880, dur = 0.7) {
+  if (!soundOn) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
     const gain = ctx.createGain();
+
     const volEl = document.getElementById('volSlider');
     const vol = volEl ? (parseFloat(volEl.value) / 100) : 1.0;
 
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    osc1.type = 'square';
+    osc1.frequency.setValueAtTime(freq, ctx.currentTime);
 
-    // Clean envelope to prevent click artifacts
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(freq * 1.5, ctx.currentTime);
+
     gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(vol * 0.85, ctx.currentTime + 0.015);
-    gain.gain.setValueAtTime(vol * 0.85, ctx.currentTime + dur - 0.025);
+    gain.gain.linearRampToValueAtTime(vol * 0.95, ctx.currentTime + 0.02);
+    gain.gain.setValueAtTime(vol * 0.95, ctx.currentTime + dur - 0.04);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
 
-    osc.connect(gain);
+    osc1.connect(gain);
+    osc2.connect(gain);
     gain.connect(ctx.destination);
 
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + dur);
-    setTimeout(() => {
-      try { ctx.close(); } catch (e) { }
-    }, (dur + 0.2) * 1000);
-  } catch (e) { }
+    osc1.start(ctx.currentTime);
+    osc2.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + dur);
+    osc2.stop(ctx.currentTime + dur);
+  } catch (e) {
+    console.warn('playLoudPrepTone error:', e);
+  }
 }
 
-function playBeep(freq = 600, dur = 0.6) {
-  playPrepTone(freq, dur);
+function playPrepTone(freq = 880, dur = 0.7) {
+  playLoudPrepTone(freq, dur);
+}
+
+function playBeep(freq = 880, dur = 0.7) {
+  playLoudPrepTone(freq, dur);
 }
 
 // Cancel audio/priprava phase and return to idle.
@@ -65,6 +128,10 @@ function cancelAudio() {
 async function handleStart() {
   console.log('UI_CONTROL: Start button clicked.');
   if (isRunning || soundPlaying) return;
+
+  // Immediately unlock audio resources synchronously on user gesture
+  unlockAudio();
+
   if (!bleChar && typeof showBleConfirm === 'function') {
     const proceed = await showBleConfirm();
     if (!proceed) return;
@@ -80,7 +147,7 @@ async function handleStart() {
 
   if (pripravaOn) {
     const totalMs = (discipline === 'letna' ? 180 : 60) * 1000;
-    playPrepTone(600, 0.6);
+    playLoudPrepTone(880, 0.7);
     document.getElementById('timerLabel').textContent = 'PRIPRAVA ORODJA';
     _pripravaEnd = Date.now() + totalMs;
     lastSpokenSec = null;
@@ -101,7 +168,7 @@ function tickPriprava() {
   document.getElementById('lsTimer').textContent = mm + ':' + ss;
   if (remaining <= 0) {
     _pripravaRaf = null;
-    playPrepTone(600, 0.6);
+    playLoudPrepTone(880, 0.7);
     vibrate([80, 60, 120]);
     document.getElementById('timerLabel').textContent = 'PREMOR...';
     document.getElementById('timerMain').textContent = '00:00';
@@ -123,7 +190,19 @@ function tickPriprava() {
 
 function speakPrepSeconds(s) {
   if (!ttsOn || !('speechSynthesis' in window)) return;
-  const numWords = {
+  const numWordsSl = {
+    10: 'deset',
+    9: 'devet',
+    8: 'osem',
+    7: 'sedem',
+    6: 'šest',
+    5: 'pet',
+    4: 'štiri',
+    3: 'tri',
+    2: 'dve',
+    1: 'ena'
+  };
+  const numWordsPl = {
     10: 'deset',
     9: 'devet',
     8: 'osem',
@@ -135,39 +214,85 @@ function speakPrepSeconds(s) {
     2: 'dva',
     1: 'ena'
   };
-  const word = numWords[s];
+
+  const voices = window.speechSynthesis.getVoices() || [];
+  let preferredVoice = voices.find(v => (v.lang || '').toLowerCase().startsWith('sl'));
+  let isPolish = false;
+
+  if (!preferredVoice) {
+    preferredVoice = voices.find(v => (v.name || '').includes('Google polski'))
+      || voices.find(v => (v.name || '').toLowerCase().includes('polski') || (v.lang || '').toLowerCase().startsWith('pl'));
+    if (preferredVoice) isPolish = true;
+  }
+
+  if (!preferredVoice && voices.length > 0) {
+    preferredVoice = voices.find(v => v.default) || voices[0];
+  }
+
+  const word = isPolish ? numWordsPl[s] : numWordsSl[s];
   if (!word) return;
 
   const utterance = new SpeechSynthesisUtterance(word);
-  utterance.lang = 'pl-PL';
+  if (preferredVoice) {
+    utterance.voice = preferredVoice;
+    utterance.lang = preferredVoice.lang || (isPolish ? 'pl-PL' : 'sl-SI');
+  } else {
+    utterance.lang = 'sl-SI';
+  }
   utterance.rate = 1.05;
   utterance.pitch = 1.0;
 
-  const voices = window.speechSynthesis.getVoices();
-  const preferredVoice = voices.find(v => (v.name || '').includes('Google polski'))
-    || voices.find(v => (v.name || '').toLowerCase().includes('polski') || (v.lang || '').toLowerCase().startsWith('pl'))
-    || voices.find(v => (v.lang || '').toLowerCase().startsWith('sl'));
-  if (preferredVoice) {
-    utterance.voice = preferredVoice;
-  }
+  const volEl = document.getElementById('volSlider');
+  utterance.volume = volEl ? (parseFloat(volEl.value) / 100) : 1.0;
 
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
+  try {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+    setTimeout(() => {
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (e) { }
+    }, 15);
+  } catch (e) { }
 }
 
 function startSoundPhase() {
   console.log('STOPWATCH: Starting preparation phase (sound=' + soundOn + ', discipline=' + discipline + ')...');
   document.getElementById('timerLabel').textContent = 'PRIPRAVA...';
   if (soundOn) {
-    if (_audioEl) { _audioEl.pause(); _audioEl.currentTime = 0; }
-    _audioEl = new Audio(discipline === 'zimska' ? AUDIO_ZIMSKA : AUDIO_LETNA);
+    if (!_audioEl) {
+      _audioEl = new Audio(discipline === 'zimska' ? AUDIO_ZIMSKA : AUDIO_LETNA);
+    } else {
+      _audioEl.src = discipline === 'zimska' ? AUDIO_ZIMSKA : AUDIO_LETNA;
+    }
     const slider = document.getElementById('volSlider');
-    _audioEl.volume = slider ? (slider.value / 100) : 1.0;
+    _audioEl.volume = slider ? (parseFloat(slider.value) / 100) : 1.0;
+    _audioEl.currentTime = 0;
     _audioStarted = false;
-    function _onceStart() { if (!_audioStarted) { _audioStarted = true; startTimerActual(); } }
-    _audioEl.addEventListener('ended', _onceStart);
-    _audioEl.addEventListener('error', _onceStart);
-    _audioEl.play().catch(_onceStart);
+
+    function _onceStart() {
+      if (!_audioStarted) {
+        _audioStarted = true;
+        startTimerActual();
+      }
+    }
+
+    _audioEl.onended = _onceStart;
+    _audioEl.onerror = (err) => {
+      console.warn('Audio element playback error, falling back to WebAudio tone:', err);
+      playLoudPrepTone(900, 0.7);
+      setTimeout(_onceStart, 800);
+    };
+
+    const p = _audioEl.play();
+    if (p !== undefined) {
+      p.catch((err) => {
+        console.warn('Audio play() failed/blocked, falling back to WebAudio tone:', err);
+        playLoudPrepTone(900, 0.7);
+        setTimeout(_onceStart, 800);
+      });
+    }
   } else {
     startTimerActual();
   }
