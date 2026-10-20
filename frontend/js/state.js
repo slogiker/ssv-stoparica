@@ -10,7 +10,7 @@ let rafId = null;
 let soundOn = true;
 let hapticOn = true;
 let darkOn = localStorage.getItem('ssv_dark') !== '0';
-let ttsOn = localStorage.getItem('ssv_tts') === '1';
+let ttsOn = localStorage.getItem('ssv_tts') !== '0';
 let discipline = 'letna';
 let ekipa = localStorage.getItem('ssv_ekipa') || 'Člani-A';
 

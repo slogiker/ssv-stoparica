@@ -113,7 +113,8 @@ function tickPriprava() {
     }, 2500);
     return;
   }
-  if (s <= 5 && s > 0 && s !== lastSpokenSec) {
+  // TODO: Dodaj številčni vnos (number input) za izbiro sekunde začetka odštevanja (npr. pri kateri sekundi se začne odštevati namesto fiksno 5)
+  if (ttsOn && s <= 5 && s > 0 && s !== lastSpokenSec) {
     lastSpokenSec = s;
     speakPrepSeconds(s);
   }
@@ -121,7 +122,7 @@ function tickPriprava() {
 }
 
 function speakPrepSeconds(s) {
-  if (!('speechSynthesis' in window)) return;
+  if (!ttsOn || !('speechSynthesis' in window)) return;
   const numWords = {
     10: 'deset',
     9: 'devet',

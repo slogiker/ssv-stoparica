@@ -83,3 +83,4 @@ Ranked by value for this project:
 10. **Manifest icon fix** — separate `any` and `maskable` purpose entries with proper safe-zone padding
 11. **`orientation: "any"` in manifest** — lets CSS landscape mode work after PWA install (currently locked to portrait by manifest)
 12. **Email verification** — send verification link on register (requires Nodemailer or transactional email service)
+13. **Nastavljiv začetek glasovnega odštevanja**: Dodaj številčni vnos (number input) v nastavitve za določitev sekunde, pri kateri se začne glasovno odštevanje priprave (trenutno fiksno od 5 do 1).

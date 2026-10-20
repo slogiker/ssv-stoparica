@@ -138,36 +138,9 @@ function toggleTts() {
   localStorage.setItem('ssv_tts', ttsOn ? '1' : '0');
   const tog = document.getElementById('ttsTog');
   if (tog) tog.className = 'tog' + (ttsOn ? ' on' : '');
-}
-
-function speakSlovenianTime(seconds) {
-  if (!('speechSynthesis' in window)) return;
-  function getNumberWords(num) {
-    if (num === 0) return 'nič';
-    const ones = ['', 'ena', 'dve', 'tri', 'štiri', 'pet', 'šest', 'sedem', 'osem', 'devet'];
-    const teens = ['deset', 'enajst', 'dvanajst', 'trinajst', 'štirinajst', 'petnajst', 'šestnajst', 'sedemnajst', 'osemnajst', 'devetnajst'];
-    const tens = ['', 'deset', 'dvajset', 'trideset', 'štirideset', 'petdeset', 'šestdeset', 'sedemdeset', 'osemdeset', 'devetdeset'];
-    if (num < 10) return ones[num];
-    if (num < 20) return teens[num - 10];
-    const ten = Math.floor(num / 10);
-    const one = num % 10;
-    if (one === 0) return tens[ten];
-    let oneWord = (one === 1) ? 'en' : ones[one];
-    if (one === 2) oneWord = 'dve';
-    return oneWord + 'in' + tens[ten];
+  if (!ttsOn && 'speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch (e) { }
   }
-  const wholeSeconds = Math.floor(seconds);
-  const hundredths = Math.round((seconds - wholeSeconds) * 100);
-  let text = getNumberWords(wholeSeconds);
-  if (hundredths > 0) text += ' in ' + getNumberWords(hundredths);
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'sl-SI';
-  const voices = window.speechSynthesis.getVoices();
-  const slVoice = voices.find(v => v.lang.startsWith('sl'));
-  if (slVoice) utterance.voice = slVoice;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
 }
 
 function togglePriprava() {
